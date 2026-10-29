@@ -105,6 +105,8 @@ export class Game {
     generateWorld(this.world, seed);
     this.dungeons = generateDungeons(this, seed);
     for (let i = 0; i < CAMPS.initial; i++) spawnCamp(this);
+    // What dawn regrowth refills toward: the map as it starts.
+    for (const n of this.world.nodes) this.world.start[n.type]++;
     this.world.computeFlow();
   }
 

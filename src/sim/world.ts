@@ -6,6 +6,14 @@ import { BUILDINGS, HEARTH_LEVELS, ROMAN } from '../data/buildings';
 import { NODES, RES_EMOJI } from '../data/enemies';
 import type { BuildingDef, BuildingId, Cost, NodeDef, NodeId, TierStats } from '../data/types';
 import { MinHeap } from '../core/heap';
+
+/** Dawn regrowth (see World.regrow). */
+const REGROW = {
+  share: 0.5,
+  min: { tree: 22, rock: 9, gold: 3 } as Record<NodeId, number>,
+  richPerDay: 0.05,
+  maxRich: 2.5,
+};
 import { circleRectOverlap, clamp, dist, hash2 } from '../core/math';
 import type { Game } from './game';
 import type { Player } from './player';
@@ -99,7 +107,8 @@ export class World {
 
   // ----------------------------- Nodes ------------------------------------
 
-  trySpawnNode(type: NodeId, fx: number, fy: number, minDist = 6): boolean {
+  /** `rich` multiplies how much it holds (regrowth on later days). */
+  trySpawnNode(type: NodeId, fx: number, fy: number, minDist = 6, rich = 1): boolean {
     const tx = Math.floor(fx), ty = Math.floor(fy);
     if (tx < 1 || ty < 1 || tx >= MAP_W - 1 || ty >= MAP_H - 1) return false;
     const i = idx(tx, ty);
@@ -110,7 +119,7 @@ export class World {
     const def = NODES[type];
     const n: ResourceNode = {
       id: this.g.nextId(), type, def, tx, ty, x: (tx + 0.5) * TILE, y: (ty + 0.5) * TILE, r: def.r,
-      amount: def.amount, seed: hash2(tx * 31, ty * 17), lastHit: -1,
+      amount: Math.round(def.amount * rich), seed: hash2(tx * 31, ty * 17), lastHit: -1,
     };
     // Don't bury a player inside a fresh node.
     if (this.g.players.some(p => dist(n.x, n.y, p.x, p.y) < 50)) return false;
@@ -127,16 +136,29 @@ export class World {
     this.changed();
   }
 
-  /** Each dawn the wilds regrow a bit so the map never runs dry. */
-  regrow(): void {
-    const cx = MAP_W / 2, cy = MAP_H / 2;
-    let trees = 0, rocks = 0, gold = 0, tries = 0;
-    while ((trees < 22 || rocks < 9 || gold < 3) && tries++ < 600) {
-      const a = Math.random() * Math.PI * 2, d = 10 + Math.random() * 28;
-      const x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d;
-      if (trees < 22) { if (this.trySpawnNode('tree', x, y, 10)) trees++; }
-      else if (rocks < 9) { if (this.trySpawnNode('rock', x, y, 10)) rocks++; }
-      else if (this.trySpawnNode('gold', x, y, 14)) gold++;
+  /** How many of each node the map started with: dawn regrowth refills toward it. */
+  start: Record<NodeId, number> = { tree: 0, rock: 0, gold: 0 };
+
+  /**
+   * Each dawn the wilds regrow, so the map never runs dry however long the run goes: half of
+   * what's missing since the start comes back (never less than a small fixed amount), and on later
+   * days new nodes hold more (5% per day, up to 2.5×).
+   */
+  regrow(day: number): void {
+    const cx = MAP_W / 2, cy = MAP_H / 2, rich = Math.min(REGROW.maxRich, 1 + REGROW.richPerDay * (day - 1));
+    const have: Record<NodeId, number> = { tree: 0, rock: 0, gold: 0 };
+    for (const n of this.nodes) have[n.type]++;
+    for (const type of ['tree', 'rock', 'gold'] as NodeId[]) {
+      const want = Math.max(REGROW.min[type], Math.ceil((this.start[type] - have[type]) * REGROW.share));
+      // Trees come back in small groves; rocks and gold one at a time.
+      for (let made = 0, tries = 0; made < want && tries < want * 30; tries++) {
+        const a = Math.random() * Math.PI * 2, d = 10 + Math.random() * 28;
+        const x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d;
+        const grove = type === 'tree' ? Math.min(want - made, 3 + Math.floor(Math.random() * 4)) : 1;
+        for (let i = 0; i < grove; i++) {
+          if (this.trySpawnNode(type, x + (i ? (Math.random() - 0.5) * 5 : 0), y + (i ? (Math.random() - 0.5) * 5 : 0), type === 'gold' ? 14 : 10, rich)) made++;
+        }
+      }
     }
   }
 

@@ -67,7 +67,8 @@ export class WorldView {
       seen.add(n.id);
       let img = this.nodes.get(n.id);
       if (!img) this.nodes.set(n.id, (img = this.createNode(n)));
-      const k = 0.75 + 0.25 * (n.amount / n.def.amount);
+      // Shrinks as it's harvested; rich regrowth on later days looks a little bigger.
+      const k = 0.75 + 0.25 * Math.min(1.6, n.amount / n.def.amount);
       const shaking = now - n.lastHit < 0.18;
       img.setScale(ART_SCALE * k).setX(n.x + (shaking ? Math.sin(now * 80) * 2.5 : 0));
     }

@@ -140,7 +140,7 @@ function startDay(g: Game): void {
   g.nightPlan = null;
   g.bloodMoon = false;
   g.res.gold += bonus;
-  g.world.regrow();
+  g.world.regrow(g.day);
   dungeonsAtDawn(g);
   const event = onDawn(g);
   g.events.emit('banner', {
