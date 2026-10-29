@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Icon Browser</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; padding: 16px; background: #10141d; color: #ece6d8; font: 13px system-ui, sans-serif; }
+    header { position: sticky; top: 0; background: #10141d; padding-bottom: 10px; display: flex; gap: 12px; align-items: center; z-index: 1; }
+    input { background: #1b2130; color: inherit; border: 1px solid #3a4256; border-radius: 6px; padding: 6px 8px; width: 140px; }
+    #grid { display: grid; grid-template-columns: repeat(16, 58px); gap: 2px; }
+    .ic { display: flex; flex-direction: column; align-items: center; padding: 3px 0; border-radius: 4px; cursor: pointer; }
+    .ic:hover { background: #2a3144; }
+    .ic.hit { outline: 2px solid #f2c879; }
+    .ic div { width: 32px; height: 32px; background-image: url(../assets/icons/raven32.png); image-rendering: pixelated; transform: scale(1.25); margin: 4px 0; }
+    .ic span { font-size: 10px; color: #a49c8c; }
+    #msg { color: #f2c879; }
+  </style>
+</head>
+<body>
+  <header>
+    <b>Raven icons</b> <span>Click an icon to copy its index (used as <code>icon: 123</code> in src/data).</span>
+    <input id="jump" type="number" placeholder="Jump to index"> <span id="msg"></span>
+  </header>
+  <div id="grid"></div>
+  <script>
+    const COLS = 16, SIZE = 32;
+    const img = new Image();
+    img.src = '../assets/icons/raven32.png';
+    img.onload = () => {
+      const count = COLS * (img.height / SIZE);
+      const grid = document.getElementById('grid');
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < count; i++) {
+        const el = document.createElement('div');
+        el.className = 'ic'; el.id = 'i' + i;
+        el.innerHTML = `<div style="background-position:-${(i % COLS) * SIZE}px -${Math.floor(i / COLS) * SIZE}px"></div><span>${i}</span>`;
+        el.onclick = () => navigator.clipboard?.writeText(String(i)).then(() => msg(`Copied ${i}`), () => msg(String(i)));
+        frag.appendChild(el);
+      }
+      grid.appendChild(frag);
+    };
+    img.onerror = () => { document.getElementById('grid').textContent = 'Icons not found. Run: npm run import-assets'; };
+    const msg = t => { document.getElementById('msg').textContent = t; };
+    document.getElementById('jump').onchange = e => {
+      const el = document.getElementById('i' + e.target.value);
+      if (!el) return;
+      document.querySelectorAll('.hit').forEach(x => x.classList.remove('hit'));
+      el.classList.add('hit'); el.scrollIntoView({ block: 'center' });
+    };
+  </script>
+</body>
+</html>
