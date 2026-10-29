@@ -1,4 +1,4 @@
-import { WORLD_H, WORLD_W } from '../config';
+import { FULL_H, WORLD_H, WORLD_W } from '../config';
 import { dist, lerp } from '../core/math';
 import { applyDot, damageEnemy, dealPlayerDamage, explode, slowEnemy, type ExplodeOpts, type HitTag } from './combat';
 import type { Enemy } from './enemy';
@@ -78,7 +78,9 @@ export function updateProjectiles(g: Game, dt: number): void {
     pr.x += pr.vx * dt;
     pr.y += pr.vy * dt;
     pr.life -= dt;
-    let dead = pr.life <= 0 || pr.x < 0 || pr.y < 0 || pr.x > WORLD_W || pr.y > WORLD_H;
+    let dead = pr.life <= 0 || pr.x < 0 || pr.y < 0 || pr.x > WORLD_W || pr.y > FULL_H;
+    // Dungeon walls stop shots.
+    if (!dead && pr.y >= WORLD_H && g.world.wall[idx(tileOf(pr.x), tileOf(pr.y))]) dead = true;
     if (pr.trail && Math.random() < 0.6) g.fx.particles(pr.x, pr.y, 1, pr.trail, 20, 0.3, pr.r * 0.6);
 
     if (!dead && pr.team !== 'enemy') dead = hitMonsters(g, pr) || hitNode(g, pr);

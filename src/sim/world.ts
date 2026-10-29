@@ -1,7 +1,7 @@
 // Tile grid holding buildings and resource nodes, plus collision queries and the flow field
 // monsters use to reach the Hearth.
 
-import { BUILD_RANGE, MAP_H, MAP_W, TILE, WORLD_H, WORLD_W } from '../config';
+import { BUILD_RANGE, FULL_H, GRID_H, MAP_H, MAP_W, TILE, WORLD_W } from '../config';
 import { BUILDINGS, HEARTH_LEVELS, ROMAN } from '../data/buildings';
 import { NODES, RES_EMOJI } from '../data/enemies';
 import type { BuildingDef, BuildingId, Cost, NodeDef, NodeId, TierStats } from '../data/types';
@@ -11,7 +11,8 @@ import type { Game } from './game';
 import type { Player } from './player';
 
 export const idx = (tx: number, ty: number) => ty * MAP_W + tx;
-export const inMap = (tx: number, ty: number) => tx >= 0 && ty >= 0 && tx < MAP_W && ty < MAP_H;
+/** In the grid: the overworld or the dungeon strip below it. */
+export const inMap = (tx: number, ty: number) => tx >= 0 && ty >= 0 && tx < MAP_W && ty < GRID_H;
 export const tileOf = (v: number) => Math.floor(v / TILE);
 const DIRS8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]] as const;
 
@@ -73,14 +74,16 @@ const addCost = (a: Cost, b: Cost): Cost => {
 };
 
 export class World {
-  readonly bld: (Building | null)[] = new Array(MAP_W * MAP_H).fill(null);
-  readonly node: (ResourceNode | null)[] = new Array(MAP_W * MAP_H).fill(null);
+  readonly bld: (Building | null)[] = new Array(MAP_W * GRID_H).fill(null);
+  readonly node: (ResourceNode | null)[] = new Array(MAP_W * GRID_H).fill(null);
+  /** Solid rock: the dungeon strip, except where interiors are carved out of it. */
+  readonly wall = new Uint8Array(MAP_W * GRID_H);
   readonly nodes: ResourceNode[] = [];
   readonly buildings: Building[] = [];
   /** Ground tile variant per cell, chosen by the generator and drawn by the renderer. */
-  readonly ground = new Uint8Array(MAP_W * MAP_H);
+  readonly ground = new Uint8Array(MAP_W * GRID_H);
   // Float64 on purpose: with Float32 rounding, `nd < d[j]` can stay true forever and the search never ends.
-  readonly flow = new Float64Array(MAP_W * MAP_H);
+  readonly flow = new Float64Array(MAP_W * GRID_H);
   flowDirty = true;
   hearth!: Building;
   /** Bumped whenever buildings or nodes are added or removed (multiplayer resends the lists). */
@@ -102,6 +105,8 @@ export class World {
     const i = idx(tx, ty);
     if (this.node[i] || this.bld[i]) return false;
     if (Math.hypot(tx + 0.5 - MAP_W / 2, ty + 0.5 - MAP_H / 2) < minDist) return false;
+    // Keep dungeon entrances clear.
+    if (this.g.dungeons.some(d => Math.hypot(d.x - (tx + 0.5) * TILE, d.y - (ty + 0.5) * TILE) < 2.5 * TILE)) return false;
     const def = NODES[type];
     const n: ResourceNode = {
       id: this.g.nextId(), type, def, tx, ty, x: (tx + 0.5) * TILE, y: (ty + 0.5) * TILE, r: def.r,
@@ -335,7 +340,7 @@ export class World {
   blocked(tx: number, ty: number): boolean {
     if (!inMap(tx, ty)) return true;
     const i = idx(tx, ty), b = this.bld[i];
-    return !!this.node[i] || !!(b && b.def.solid);
+    return !!this.wall[i] || !!this.node[i] || !!(b && b.def.solid);
   }
 
   computeFlow(): void {
@@ -354,7 +359,7 @@ export class World {
         const nx = x + dx, ny = y + dy;
         if (!inMap(nx, ny)) continue;
         const j = idx(nx, ny);
-        if (this.node[j]) continue;
+        if (this.node[j] || this.wall[j]) continue;
         const diag = dx !== 0 && dy !== 0;
         if (diag && (this.blocked(x + dx, y) || this.blocked(x, y + dy))) continue;
         let c = diag ? 1.4142 : 1;
@@ -397,6 +402,7 @@ export class World {
       for (let tx = tileOf(e.x - e.r); tx <= tileOf(e.x + e.r); tx++) {
         if (!inMap(tx, ty)) continue;
         const i = idx(tx, ty), n = this.node[i];
+        if (this.wall[i]) { resolveCircleRect(e, tx * TILE, ty * TILE, TILE, TILE); continue; }
         if (n) {
           const dx = e.x - n.x, dy = e.y - n.y, d = Math.hypot(dx, dy), rr = e.r + n.r;
           if (d < rr && d > 1e-3) { e.x = n.x + (dx / d) * rr; e.y = n.y + (dy / d) * rr; }
@@ -407,16 +413,17 @@ export class World {
       }
     }
     e.x = clamp(e.x, e.r, WORLD_W - e.r);
-    e.y = clamp(e.y, e.r, WORLD_H - e.r);
+    e.y = clamp(e.y, e.r, FULL_H - e.r);
     return hit;
   }
 
   circleBlocked(x: number, y: number, r: number, isPlayer: boolean): boolean {
-    if (x < r || y < r || x > WORLD_W - r || y > WORLD_H - r) return true;
+    if (x < r || y < r || x > WORLD_W - r || y > FULL_H - r) return true;
     for (let ty = tileOf(y - r); ty <= tileOf(y + r); ty++) {
       for (let tx = tileOf(x - r); tx <= tileOf(x + r); tx++) {
         if (!inMap(tx, ty)) return true;
         const i = idx(tx, ty), n = this.node[i];
+        if (this.wall[i] && circleRectOverlap(x, y, r, tx * TILE, ty * TILE, TILE, TILE)) return true;
         if (n && dist(x, y, n.x, n.y) < r + n.r) return true;
         if (this.solidFor(this.bld[i], isPlayer) && circleRectOverlap(x, y, r, tx * TILE, ty * TILE, TILE, TILE)) return true;
       }

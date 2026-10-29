@@ -17,6 +17,7 @@ export type BuildingId = 'wall' | 'gate' | 'arrowtower' | 'firetower' | 'frostsp
 export type BuildSlot = Exclude<BuildingId, 'hearth'>;
 export type EnemyId =
   | 'zombie' | 'runner' | 'bat' | 'spitter' | 'sapper' | 'brute' | 'shaman' | 'siege' | 'boss' | 'boss_warlord' | 'boss_lich'
+  | 'dboss_knight' | 'dboss_bear' | 'dboss_slime'
   | 'guard_minotaur' | 'guard_orc' | 'guard_bear';
 export type NodeId = 'tree' | 'rock' | 'gold';
 
@@ -228,6 +229,9 @@ export interface EnemyDef {
   buildingHunter?: boolean;
   bldMul?: number;
   boss?: boolean;
+  /** Which ability set a boss uses (see Enemy.bossLogic), and what it summons. */
+  bossKind?: 'warlord' | 'lich' | 'golem';
+  bossSummon?: EnemyId;
   /** Flies over walls and traps, straight at its target. */
   flying?: boolean;
   /** Blows up on reaching a building. */

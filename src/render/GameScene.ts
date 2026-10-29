@@ -4,6 +4,10 @@
 
 import Phaser from 'phaser';
 import { STEP, WORLD_H, WORLD_W } from '../config';
+import { dungeonById, regionAt } from '../sim/dungeons';
+
+/** How dark it is inside a dungeon (lit by torches and the party). */
+const DUNGEON_DARK = 0.7;
 import { BUILDINGS, BUILD_KEYS, BUILD_SLOTS } from '../data/buildings';
 import { NPC_LOOKS } from '../data/events';
 import type { SpellId, SpriteRef } from '../data/types';
@@ -16,7 +20,7 @@ import { idx, tileOf } from '../sim/world';
 import { UI } from '../ui/ui';
 import { ActorView, type ActorState } from './ActorView';
 import { FxView } from './FxView';
-import { Lighting, type Light } from './Lighting';
+import { DEPTH_DARKNESS, Lighting, type Light } from './Lighting';
 import { Overlay } from './Overlay';
 import { WorldView } from './WorldView';
 
@@ -30,6 +34,9 @@ export class GameScene extends Phaser.Scene {
   /** Views for players, monsters, allies and NPCs, keyed by entity id. */
   private actors = new Map<number, ActorView>();
   private camTarget!: Phaser.GameObjects.Zone;
+  /** Dungeon id the camera is in (0: the overworld). */
+  private region = 0;
+  private voidMask!: Phaser.GameObjects.Graphics;
   private unsubscribe: (() => void)[] = [];
   private pendingCasts = new Set<SpellId>();
   /** Online: our own basic-attack cooldown, so the swing animation plays without waiting for the server. */
@@ -40,6 +47,7 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.g = App.game!;
     this.acc = 0;
+    this.region = 0;
     this.actors = new Map();
     this.pendingCasts.clear();
     const g = this.g, p = me();
@@ -48,6 +56,7 @@ export class GameScene extends Phaser.Scene {
     this.fx = new FxView(this, g);
     this.lighting = new Lighting(this);
     this.overlay = new Overlay(this, g);
+    this.voidMask = this.add.graphics().setDepth(DEPTH_DARKNESS + 2);
 
     const cam = this.cameras.main;
     cam.setBounds(0, 0, WORLD_W, WORLD_H).setRoundPixels(true).setBackgroundColor('#0c120b');
@@ -223,9 +232,29 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** Keeps the camera inside the part of the map we're in: the overworld, or one dungeon. */
+  private followRegion(): void {
+    const g = this.g, p = me(), r = regionAt(g, p.x, p.y);
+    if (r === this.region || r < 0) return;
+    this.region = r;
+    const cam = this.cameras.main, d = dungeonById(g, r);
+    if (d) cam.setBounds(d.box.x, d.box.y, d.box.w, d.box.h);
+    else cam.setBounds(0, 0, WORLD_W, WORLD_H);
+    // A dungeon can be narrower than the screen: hide whatever lies beyond its walls.
+    const v = this.voidMask.clear(), b = d?.box, M = 4000;
+    if (b) {
+      v.fillStyle(0x050508, 1);
+      v.fillRect(b.x - M, b.y - M, M, b.h + 2 * M).fillRect(b.x + b.w, b.y - M, M, b.h + 2 * M);
+      v.fillRect(b.x, b.y - M, b.w, M).fillRect(b.x, b.y + b.h, b.w, M);
+    }
+    // A trip through a dungeon door cuts straight to the other side.
+    cam.centerOn(p.x, p.y);
+  }
+
   private renderFrame(dt: number): void {
     const g = this.g, p = me(), now = g.time;
     this.camTarget.setPosition(p.x, p.y);
+    this.followRegion();
 
     this.worldView.sync();
 
@@ -266,8 +295,10 @@ export class GameScene extends Phaser.Scene {
 
     this.fx.update(dt);
 
-    const dk = darkness(g);
-    this.lighting.draw(dk, this.collectLights(), now, g.bloodMoon || (g.phase === 'day' && g.bloodMoonNext) ? 0x2a0608 : 0x060a1e);
+    const inside = this.region > 0;
+    const dk = inside ? DUNGEON_DARK : darkness(g);
+    const tint = inside ? 0x07050c : g.bloodMoon || (g.phase === 'day' && g.bloodMoonNext) ? 0x2a0608 : 0x060a1e;
+    this.lighting.draw(dk, this.collectLights(), now, tint);
     this.overlay.draw(dk, App.build, this.mouseWorld());
   }
 
@@ -280,6 +311,11 @@ export class GameScene extends Phaser.Scene {
       if (light) out.push({ x: b.x, y: b.y, r: light * (b.type === 'hearth' ? 0.8 + 0.2 * b.hp / b.maxHp : 1), warm: true });
     }
     for (const pr of g.projectiles) if (pr.light) out.push({ x: pr.x, y: pr.y - (pr.lob?.h ?? 0), r: pr.light });
+    const d = dungeonById(g, this.region);
+    if (d) {
+      for (const t of d.torches) out.push({ x: t.x, y: t.y, r: 300, warm: true });
+      out.push({ x: d.exit.x, y: d.exit.y, r: 150 });
+    }
     this.fx.lights(out);
     return out;
   }

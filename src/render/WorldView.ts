@@ -2,9 +2,10 @@
 // with the simulation by entity id.
 
 import Phaser from 'phaser';
-import { ART_SCALE, MAP_H, MAP_W, TILE } from '../config';
+import { ART_SCALE, GRID_H, MAP_W, TILE } from '../config';
 import type { Game } from '../sim/game';
 import type { Building, ResourceNode } from '../sim/world';
+import { entryLock } from '../sim/dungeons';
 import { DEPTH_ACTORS } from './ActorView';
 import { buildingKey, gateKey, GROUND_TILE, wallKey } from './textures';
 
@@ -33,7 +34,7 @@ export class WorldView {
 
   constructor(private scene: Phaser.Scene, private g: Game) {
     const data: number[][] = [];
-    for (let y = 0; y < MAP_H; y++) {
+    for (let y = 0; y < GRID_H; y++) {
       const row: number[] = [];
       for (let x = 0; x < MAP_W; x++) row.push(g.world.ground[y * MAP_W + x]);
       data.push(row);
@@ -41,6 +42,17 @@ export class WorldView {
     const map = scene.make.tilemap({ data, tileWidth: GROUND_TILE, tileHeight: GROUND_TILE });
     const tiles = map.addTilesetImage('ground', 'ground', GROUND_TILE, GROUND_TILE, 0, 0)!;
     map.createLayer(0, tiles, 0, 0)!.setScale(TILE / GROUND_TILE).setDepth(DEPTH_GROUND);
+
+    // Dungeons: the way out, and torches on the chamber walls (both fixed, from the layout).
+    for (const d of g.dungeons) {
+      const portal = scene.add.image(d.exit.x, d.exit.y, 'portal').setScale(ART_SCALE * 1.2).setDepth(DEPTH_FLOOR);
+      scene.tweens.add({ targets: portal, angle: 360, duration: 6000, repeat: -1 });
+      scene.tweens.add({ targets: portal, scale: ART_SCALE * 1.4, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      for (const t of d.torches) {
+        scene.add.sprite(t.x, t.y + 8, 'flame').setOrigin(0.5, 1).setScale(ART_SCALE * 0.9).setDepth(DEPTH_ACTORS + t.y)
+          .play({ key: 'flame', startFrame: Math.floor(Math.random() * 4) });
+      }
+    }
   }
 
   sync(): void {
@@ -91,6 +103,7 @@ export class WorldView {
     };
     for (const c of g.camps) show(c.id, c.x, c.y, c.opened ? 'chest_open' : 'chest');
     for (const p of g.pickups) show(p.id, p.x, p.y, 'crate');
+    for (const d of g.dungeons) show(d.id, d.x, d.y, `cave_${d.theme}${entryLock(g, d) ? '_sealed' : ''}`);
     for (const [id, img] of this.props) if (!seen.has(id)) { img.destroy(); this.props.delete(id); }
   }
 

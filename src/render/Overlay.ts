@@ -204,7 +204,7 @@ export class Overlay {
       for (const a of g.spawnAngles) {
         targets.push({ x: WORLD_W / 2 + Math.cos(a) * 1000, y: WORLD_H / 2 + Math.sin(a) * 1000, col: 0xff5a4a, s: 1 });
       }
-      for (const e of g.enemies) if (e.def.boss) targets.push({ x: e.x, y: e.y, col: 0xff9a3a, s: 1.4 });
+      for (const e of g.enemies) if (e.def.boss && e.y < WORLD_H) targets.push({ x: e.x, y: e.y, col: 0xff9a3a, s: 1.4 });
     } else {
       // By day, point at visitors and supply drops so they're not missed.
       for (const n of g.npcs) targets.push({ x: n.x, y: n.y, col: n.kind === 'merchant' ? 0xffe27a : 0x8fff9a, s: 1 });

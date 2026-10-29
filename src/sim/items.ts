@@ -51,7 +51,7 @@ export const roundStat = (stat: StatKey, v: number) => round(stat, v, PCT_STATS.
  */
 export function rollRarity(luck = 0, min: Rarity = 'common'): Rarity {
   const from = RARITY_ORDER.indexOf(min);
-  const pool = RARITY_ORDER.slice(from);
+  const pool = RARITY_ORDER.slice(from, RARITY_ORDER.indexOf('epic') + 1);
   const weights = pool.map((r, i) => RARITIES[r].weight * (1 + luck) ** (i + from));
   let x = Math.random() * weights.reduce((a, b) => a + b, 0);
   for (let i = 0; i < pool.length; i++) if ((x -= weights[i]) <= 0) return pool[i];
@@ -130,10 +130,12 @@ export function dropLoot(g: Game, x: number, y: number, item: Item): void {
 
 /**
  * A monster died: maybe it drops something. Tougher monsters drop more often. Night bosses drop an
- * epic (and reward shards and a legendary discovery, see forge.ts).
+ * epic (and reward shards and a legendary discovery, see forge.ts); dungeon bosses drop theirs when
+ * the dungeon is cleared (dungeons.ts).
  */
 export function monsterDrop(g: Game, e: Enemy): void {
   const d = e.def;
+  if (d.boss && e.dungeon) return;
   const chance = d.boss ? 1 : d.guard ? 0.45 : Math.min(0.35, 0.035 * Math.max(1, d.cost));
   if (Math.random() > chance) return;
   const luck = (g.bloodMoon ? 0.6 : 0) + (d.boss ? 1.5 : d.guard ? 0.5 : 0) + 0.03 * g.day;

@@ -21,6 +21,7 @@ import { updateZone, type Zone } from './zones';
 import { updateDefenses } from './defenses';
 import { startNight, updateCycle, type NightPlan, type SpawnEntry } from './cycle';
 import { buy, interact, spawnCamp, updateDaylife, type Camp, type Npc, type Pickup } from './daylife';
+import { generateDungeons, type Dungeon } from './dungeons';
 import { makeItem, noteFind, updateLoot, type Item, type Loot } from './items';
 
 export type Phase = 'day' | 'night';
@@ -82,6 +83,8 @@ export class Game {
   wares: Item[] = [];
   /** Items lying on the ground. */
   loot: Loot[] = [];
+  /** Dungeon entrances and interiors (layouts from the seed). */
+  dungeons: Dungeon[] = [];
 
   private flowTimer = 0;
 
@@ -100,6 +103,7 @@ export class Game {
   constructor(readonly seed = (Math.random() * 1e9) | 0) {
     this.world = new World(this);
     generateWorld(this.world, seed);
+    this.dungeons = generateDungeons(this, seed);
     for (let i = 0; i < CAMPS.initial; i++) spawnCamp(this);
     this.world.computeFlow();
   }
@@ -190,7 +194,7 @@ export class Game {
 
   /** Monsters attacking tonight (camp guards don't count). */
   get waveRemaining(): number {
-    return this.enemies.filter(e => !e.def.guard).length + this.spawnQueue.length;
+    return this.enemies.filter(e => !e.def.guard && !e.dungeon).length + this.spawnQueue.length;
   }
 
   // ----------------------------- Economy ----------------------------------

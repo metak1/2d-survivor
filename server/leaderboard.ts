@@ -23,7 +23,7 @@ interface Stored extends ScoreEntry {
   key: string;
 }
 
-/** Best first: more nights, then a win, then more kills, then faster. */
+/** Best first: more nights, then a win, then further into the last night, then more kills, then faster. */
 const better = (a: ScoreEntry, b: ScoreEntry) =>
   b.nights - a.nights || Number(b.won) - Number(a.won) || b.kills - a.kills || a.time - b.time;
 

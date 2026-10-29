@@ -81,6 +81,20 @@ function groundTiles(scene: Phaser.Scene): void {
     }
   });
   ['#6b4f34', '#73563a', '#654a30'].forEach((b, i) => draw(GROUND.dirt[i], b, ['#5a412a', '#80644a', '#5e452d'], 51 + i));
+  // Dungeon floors (flagstones with seams) and solid rock.
+  const flags = (i: number, base: string, seam: string, speck: string[], seed: number, extra?: (ox: number, r: () => number) => void) =>
+    draw(i, base, speck, seed, (ox, r) => {
+      px(x, seam, ox, 0, T, 1); px(x, seam, ox, 10, T, 1); px(x, seam, ox, 0, 1, 10); px(x, seam, ox + 10, 10, 1, 10);
+      extra?.(ox, r);
+    });
+  flags(GROUND.floor[0], '#3b404b', '#2a2e37', ['#454b57', '#343944'], 61);
+  flags(GROUND.floor[1], '#4a3b2c', '#352a1f', ['#56463a', '#3f3226'], 62);
+  flags(GROUND.floor[2], '#3a2522', '#261816', ['#46302b', '#2f1d1a'], 63, (ox, r) => {
+    for (let k = 0; k < 2; k++) { const X = ox + 2 + Math.floor(r() * 15), Y = 2 + Math.floor(r() * 15); px(x, '#ff6a2a', X, Y, 2, 1); px(x, '#ffb347', X, Y); }
+  });
+  draw(GROUND.wall, '#15161b', ['#1c1d23', '#101115', '#22232a'], 64, (ox, r) => {
+    for (let k = 0; k < 3; k++) px(x, '#26272e', ox + Math.floor(r() * 16), Math.floor(r() * 18), 3, 1);
+  });
   add(scene, 'ground', c);
 }
 
@@ -313,6 +327,27 @@ function props(scene: Phaser.Scene): void {
   }
 }
 
+// ----------------------------- Dungeons ------------------------------------
+
+/** Cave mouths in the wilds (one per theme, rune stones in its colour; sealed with bars) and the way out. */
+function dungeonProps(scene: Phaser.Scene): void {
+  const theme: [string, string][] = [['crypt', '#9ad8ff'], ['warren', '#9be36b'], ['depths', '#ff8a3a']];
+  for (const [name, rune] of theme) for (const sealed of [false, true]) {
+    const [c, x] = makeCanvas(30, 24);
+    disc(x, 'rgba(0,0,0,0.35)', 15, 21, 14, 3);
+    disc(x, '#5d6068', 15, 14, 14, 10); disc(x, '#73767f', 13, 11, 10, 7); disc(x, '#878a93', 11, 8, 5, 3);
+    disc(x, '#0a0a0e', 15, 16, 7, 7); px(x, '#0a0a0e', 8, 16, 15, 6); disc(x, '#1a1a22', 15, 15, 5, 5);
+    px(x, '#4a4d55', 6, 20, 4, 2); px(x, '#4a4d55', 21, 20, 4, 2);
+    px(x, rune, 5, 13, 2, 3); px(x, rune, 24, 13, 2, 3); px(x, '#ffffff', 5, 13); px(x, '#ffffff', 24, 13);
+    if (sealed) for (let k = 0; k < 4; k++) px(x, '#8a8f98', 10 + k * 3, 10, 1, 12);
+    add(scene, `cave_${name}${sealed ? '_sealed' : ''}`, c);
+  }
+  const [c, x] = makeCanvas(20, 20);
+  disc(x, '#3a1a6a', 10, 10, 9, 9); disc(x, '#6a3ab0', 10, 10, 7, 7); disc(x, '#a07aff', 10, 10, 4.5, 4.5); disc(x, '#e8dcff', 10, 10, 2, 2);
+  px(x, '#c8a8ff', 3, 9, 2, 1); px(x, '#c8a8ff', 15, 11, 2, 1); px(x, '#c8a8ff', 9, 3, 1, 2);
+  add(scene, 'portal', c);
+}
+
 function flames(scene: Phaser.Scene): void {
   const W = 12, H = 16, N = 4;
   const [c, x] = makeCanvas(W * N, H);
@@ -373,6 +408,7 @@ function projectiles(scene: Phaser.Scene): void {
 
 export function generateTextures(scene: Phaser.Scene): void {
   groundTiles(scene);
+  dungeonProps(scene);
   trees(scene);
   rocks(scene);
   walls(scene);

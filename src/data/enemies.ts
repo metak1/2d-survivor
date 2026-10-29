@@ -28,15 +28,26 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
     look: { sprite: 'black_knight', scale: 2.7 }, blurb: 'shells buildings beyond tower range' },
   // Bosses, one every BOSS_EVERY nights in BOSS_ORDER. The last one guards the final night.
   boss_warlord: { name: 'Minotaur Warlord', hp: 1500, speed: 66, r: 26, dmg: 32, atkCd: 1.6, reach: 12, xp: 150, gold: 50,
-    color: '#c0703a', cost: 0, weight: 0, minNight: 99, boss: true, bldMul: 1.5,
+    color: '#c0703a', cost: 0, weight: 0, minNight: 99, boss: true, bldMul: 1.5, bossKind: 'warlord', bossSummon: 'runner',
     look: { sprite: 'minotaur', scale: 4.2 }, blurb: 'boss: charges through walls, calls wolves' },
   boss_lich: { name: 'Lich Sovereign', hp: 1700, speed: 52, r: 22, dmg: 20, atkCd: 1.6, reach: 8, xp: 220, gold: 70,
     color: '#9a7cff', cost: 0, weight: 0, minNight: 99, boss: true, ranged: true, range: 330, projSpeed: 300,
-    shaman: { cd: 6, heal: 0.12, r: 240 },
+    shaman: { cd: 6, heal: 0.12, r: 240 }, bossKind: 'lich', bossSummon: 'zombie',
     look: { sprite: 'necromancer', scale: 3.8 }, blurb: 'boss: raises the dead, frost novas' },
   boss: { name: 'Flame Golem', hp: 2600, speed: 54, r: 30, dmg: 40, atkCd: 2.0, reach: 12, xp: 300, gold: 100,
-    color: '#ff7a2a', cost: 0, weight: 0, minNight: 99, boss: true, bldMul: 1.2,
+    color: '#ff7a2a', cost: 0, weight: 0, minNight: 99, boss: true, bldMul: 1.2, bossKind: 'golem', bossSummon: 'sapper',
     look: { sprite: 'flame_golem', scale: 4 }, blurb: 'final boss: slams, rains fire' },
+
+  // Dungeon bosses (see data/dungeons.ts). They guard the deepest chamber and drop legendaries.
+  dboss_knight: { name: 'Death Knight', hp: 1300, speed: 70, r: 22, dmg: 28, atkCd: 1.4, reach: 10, xp: 160, gold: 60,
+    color: '#7a7a9a', cost: 0, weight: 0, minNight: 99, boss: true, bossKind: 'warlord', bossSummon: 'zombie',
+    look: { sprite: 'black_knight', scale: 3.8 }, blurb: 'charges, stomps, raises skeletons' },
+  dboss_bear: { name: 'Werebear Chieftain', hp: 1700, speed: 82, r: 24, dmg: 32, atkCd: 1.3, reach: 12, xp: 220, gold: 80,
+    color: '#7a5a3a', cost: 0, weight: 0, minNight: 99, boss: true, bossKind: 'warlord', bossSummon: 'runner',
+    look: { sprite: 'werebear', scale: 3.9 }, blurb: 'charges, stomps, calls the pack' },
+  dboss_slime: { name: 'Magma King', hp: 2200, speed: 50, r: 30, dmg: 36, atkCd: 1.8, reach: 12, xp: 300, gold: 110,
+    color: '#ff6a2a', cost: 0, weight: 0, minNight: 99, boss: true, bossKind: 'golem', bossSummon: 'sapper',
+    look: { sprite: 'lava_slime', scale: 6.5 }, blurb: 'slams, rains fire, splits off slimes' },
 
   // Elite camp guardians (daytime treasure).
   guard_minotaur: { name: 'Minotaur', hp: 520, speed: 80, r: 18, dmg: 24, atkCd: 1.4, reach: 10, xp: 40, gold: 12,

@@ -66,6 +66,8 @@ export interface Snapshot {
   /** Night vote: who has voted, seconds left. */
   votes: number[]; voteT: number;
   loot: Loot[]; wares: Item[];
+  /** Dungeon state (layouts come from the seed): [id, depth, cleared, reopen]. */
+  dungeons: [number, number, boolean, number][];
   players: PlayerSnap[]; enemies: EnemySnap[]; allies: AllySnap[]; projectiles: Partial<Projectile>[]; zones: Zone[];
   camps: Camp[]; npcs: Npc[]; pickups: Pickup[];
   bstate: BuildingState[];
@@ -95,6 +97,7 @@ export function encodeSnapshot(g: Game, knownVersion: number, since: number, eve
     queued: g.spawnQueue.length, spawnAngles: g.spawnAngles, plan: !!g.nightPlan, shopBought: [...g.shopBought],
     votes: [...g.nightVotes], voteT: Math.ceil(g.voteT),
     loot: g.loot, wares: g.wares,
+    dungeons: g.dungeons.map(d => [d.id, d.depth, d.cleared, d.reopen]),
     players: g.players.map(p => ({
       id: p.id, name: p.name, cls: p.cls, slot: p.slot, x: r1(p.x), y: r1(p.y), hp: r1(p.hp), level: p.level, xp: Math.floor(p.xp),
       points: p.points, talents: p.talents, cds: p.cds, buffs: p.buffs, lust: p.lustStacks, barrier: r1(p.barrier),
@@ -163,6 +166,10 @@ export function applySnapshot(g: Game, s: Snapshot, interp: Interpolator, selfId
   g.voteT = s.voteT;
   g.loot = s.loot;
   g.wares = s.wares;
+  for (const [id, depth, cleared, reopen] of s.dungeons) {
+    const d = g.dungeons.find(x => x.id === id);
+    if (d) Object.assign(d, { depth, cleared, reopen });
+  }
   g.camps = s.camps;
   g.npcs = s.npcs;
   g.pickups = s.pickups;

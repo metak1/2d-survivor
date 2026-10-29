@@ -7,6 +7,7 @@ import type { Game } from './game';
 import type { Player } from './player';
 import { hasCompanions } from './ally';
 import { healFriend, mostWounded } from './heal';
+import { dungeonBossKilled } from './dungeons';
 import { bossReward } from './forge';
 import { legendBonus } from './stats';
 import { FORGE } from '../data/items';
@@ -216,7 +217,8 @@ function killEnemy(g: Game, e: Enemy, o: HitOpts): void {
   // Everyone in the party levels together. Bigger parties face more monsters, each worth less.
   for (const p of g.players) p.gainXp((e.def.xp * mul) / g.partyMul);
   monsterDrop(g, e);
-  if (e.def.boss) {
+  if (e.def.boss && e.dungeon) dungeonBossKilled(g, e);
+  else if (e.def.boss) {
     bossReward(g, g.players, FORGE.nightBoss);
     g.fx.shake(20);
     g.fx.toast(`The ${e.def.name} is slain! +60 wood, +40 stone`);

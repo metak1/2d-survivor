@@ -2,6 +2,7 @@
 // what's coming while there's still light to prepare.
 
 import { BOSS_EVERY, DARKNESS_MAX, DAY_LEN, FINAL_NIGHT, NIGHT_BASE_LEN, WORLD_H, WORLD_W } from '../config';
+import { dungeonsAtDawn, expelAll, warnInside } from './dungeons';
 import { BOSS_ORDER, ENEMIES } from '../data/enemies';
 import type { EnemyId } from '../data/types';
 import { choice, compass, rand, TAU } from '../core/math';
@@ -44,7 +45,7 @@ export function updateCycle(g: Game, dt: number): void {
   }
   if (g.phaseTime < g.phaseLen) return;
   // The final night only ends once its boss is dead.
-  const boss = isFinalNight(g) && g.enemies.find(e => e.def.boss && !e.dead);
+  const boss = isFinalNight(g) && g.enemies.find(e => e.def.boss && !e.dead && !e.dungeon);
   if (boss) {
     if (!g.holdNight) g.fx.toast(`The night won't lift while the ${boss.def.name} stands!`);
     g.holdNight = true;
@@ -81,6 +82,7 @@ export function planNight(g: Game): void {
   if (boss) queue.push({ type: boss, t: window * 0.35, angle: angles[0] });
   queue.sort((a, b) => a.t - b.t);
   g.nightPlan = { len, angles, queue, bloodMoon: blood };
+  warnInside(g);
 
   const counts = new Map<EnemyId, number>();
   for (const s of queue) counts.set(s.type, (counts.get(s.type) || 0) + 1);
@@ -107,6 +109,7 @@ export function startNight(g: Game, early = false): void {
   g.spawnQueue = plan.queue;
   g.bloodMoon = plan.bloodMoon;
   g.bloodMoonNext = false;
+  expelAll(g);
   onNightfall(g);
 
   const dirs = [...new Set(plan.angles.map(compass))].join(' and ');
@@ -138,6 +141,7 @@ function startDay(g: Game): void {
   g.bloodMoon = false;
   g.res.gold += bonus;
   g.world.regrow();
+  dungeonsAtDawn(g);
   const event = onDawn(g);
   g.events.emit('banner', {
     title: `Day ${g.day}`,

@@ -9,7 +9,7 @@ import type { Snapshot } from './snapshot';
 
 export const WS_PATH = '/ws';
 /** Bumped when messages change, so an old browser tab is told to refresh instead of misbehaving. */
-export const PROTOCOL = 5;
+export const PROTOCOL = 6;
 
 /** Someone in a room (ids are connection ids, not in-game player ids). */
 export interface LobbyMember { id: number; name: string; cls: ClassId; host: boolean; playing: boolean; online: boolean }

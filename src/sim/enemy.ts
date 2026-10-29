@@ -1,9 +1,10 @@
-import { WORLD_H, WORLD_W } from '../config';
+import { FULL_H, WORLD_W } from '../config';
 import { ENEMIES } from '../data/enemies';
 import type { EnemyDef, EnemyId } from '../data/types';
 import { clamp, dist, rand, TAU } from '../core/math';
 import { damageEnemy, enemiesInRadius, enemyDmgMul, explode, nearestFriendly, type Friendly } from './combat';
 import { distToBuilding, type Building } from './world';
+import { regionAt } from './dungeons';
 import type { Game } from './game';
 import type { Player } from './player';
 
@@ -37,8 +38,10 @@ export class Enemy {
   dead = false;
   lastHit = -1;
   moving = false;
-  /** Camp guards return here when the player leaves. */
+  /** Camp guards and dungeon monsters return here when the player leaves. */
   home: { x: number; y: number } | null = null;
+  /** Id of the dungeon it lives in (0: the overworld). It ignores the sun and the Hearth. */
+  dungeon = 0;
   /** Seconds until a boss's delayed blast (Flame Golem's slam, the Lich's frost nova) goes off. */
   slamT = 0;
   private slam = { r: 0, dmg: 0, bld: 0, color: '' };
@@ -85,7 +88,7 @@ export class Enemy {
     if (this.dead) return;
 
     // Sunlight burns night monsters left over at dawn. Camp guards don't mind it.
-    if (g.phase === 'day' && !d.guard) {
+    if (g.phase === 'day' && !d.guard && !this.dungeon) {
       damageEnemy(g, this, this.maxHp * 0.35 * dt, { silent: true, noReward: true });
       if (Math.random() < 0.3) g.fx.particles(this.x, this.y, 1, '#ffb347', 60, 0.6, 3);
       if (this.dead) return;
@@ -118,6 +121,8 @@ export class Enemy {
       foe = this.taunter;
       fd = dist(this.x, this.y, foe.x, foe.y);
     }
+    // Walls between the overworld and the dungeons (and between dungeons) can't be seen through.
+    if (foe && regionAt(g, foe.x, foe.y) !== this.dungeon) { foe = null; fd = Infinity; }
     if (d.boss && this.bossLogic(dt, foe, fd)) return;
     if (d.shaman) this.shamanLogic(dt);
 
@@ -176,7 +181,17 @@ export class Enemy {
     let spd = this.moveSpeed;
 
     let tx: number, ty: number, flowBld: Building | null = null;
-    if (foe && (fd < aggro || this.taunt > 0)) { tx = foe.x; ty = foe.y; }
+    if (this.dungeon) {
+      // Dungeon packs wake when someone comes close or a packmate is hit, chase a while, then go home.
+      const home = this.home!;
+      const awake = foe && (fd < 280 || this.taunt > 0 || g.time - this.lastHit < 3) && dist(foe.x, foe.y, home.x, home.y) < 760;
+      if (!awake) foe = null;
+      if (foe) { tx = foe.x; ty = foe.y; }
+      else {
+        tx = home.x; ty = home.y;
+        if (dist(this.x, this.y, home.x, home.y) < 16) { spd = 0; this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.05 * dt); }
+      }
+    } else if (foe && (fd < aggro || this.taunt > 0)) { tx = foe.x; ty = foe.y; }
     else { const st = w.flowStep(this.x, this.y); tx = st.x; ty = st.y; flowBld = st.bld; }
 
     // Shamans hang back behind the horde.
@@ -233,7 +248,7 @@ export class Enemy {
     const target = foe && fd < 700 ? foe : null;
     this.stepToward(target ? target.x : h.x, target ? target.y : h.y, this.moveSpeed, dt);
     this.x = clamp(this.x, this.r, WORLD_W - this.r);
-    this.y = clamp(this.y, this.r, WORLD_H - this.r);
+    this.y = clamp(this.y, this.r, FULL_H - this.r);
     if (this.atk > 0) return;
     if (target && fd < this.r + target.r + d.reach + 2) this.strike(target);
     else if (!target && distToBuilding(this, h) < this.r + d.reach + 4) {
@@ -321,6 +336,8 @@ export class Enemy {
   private bossLogic(dt: number, foe: Friendly | null, fd: number): boolean {
     const g = this.g;
     if (this.charge) return this.charging(dt);
+    // A dungeon boss sleeps until someone reaches its chamber.
+    if (this.dungeon && (!foe || fd > 520)) return false;
     if (this.windup > 0) {
       this.windup -= dt;
       if (this.windup <= 0) this.charge = { vx: Math.cos(this.angle) * 600, vy: Math.sin(this.angle) * 600, t: 0.6, hit: new Set() };
@@ -340,10 +357,11 @@ export class Enemy {
     }
     this.bossT -= dt;
     if (this.bossT > 0) return false;
-    this.bossT = (this.type === 'boss_lich' ? 5 : 6.5) * (this.enraged ? 0.65 : 1);
+    const kind = this.def.bossKind ?? 'golem';
+    this.bossT = (kind === 'lich' ? 5 : 6.5) * (this.enraged ? 0.65 : 1);
     const step = this.bossStep++;
-    if (this.type === 'boss_warlord') this.warlordAbility(step, foe, fd);
-    else if (this.type === 'boss_lich') this.lichAbility(step);
+    if (kind === 'warlord') this.warlordAbility(step, foe, fd);
+    else if (kind === 'lich') this.lichAbility(step);
     else this.golemAbility(step, fd);
     return false;
   }
@@ -365,7 +383,7 @@ export class Enemy {
     }
     g.fx.text(this.x, this.y - this.r - 20, 'ROAR', '#ffb36a', 18, 1.2);
     g.events.emit('vfx', { kind: 'ring', x: this.x, y: this.y, r: 160, color: '#ffb36a', life: 0.6 });
-    this.summon('runner', 3 + Math.floor(g.day / 5), '#c0703a');
+    this.summon(this.def.bossSummon ?? 'runner', 3 + Math.floor(g.day / 5), this.def.color);
   }
 
   /** A charge: tramples friends it runs through and smashes into buildings. */
@@ -373,7 +391,7 @@ export class Enemy {
     const g = this.g, c = this.charge!;
     c.t -= dt;
     this.x = clamp(this.x + c.vx * dt, this.r, WORLD_W - this.r);
-    this.y = clamp(this.y + c.vy * dt, this.r, WORLD_H - this.r);
+    this.y = clamp(this.y + c.vy * dt, this.r, FULL_H - this.r);
     this.moving = true;
     for (const f of [...g.players, ...g.allies]) {
       if (f.dead || c.hit.has(f) || dist(this.x, this.y, f.x, f.y) > this.r + f.r + 6) continue;
@@ -400,7 +418,7 @@ export class Enemy {
     g.events.emit('anim', { id: this.id, anim: 'attack2' });
     switch (step % 3) {
       case 0:
-        this.summon('zombie', 4 + Math.floor(g.day / 4), '#9a7cff');
+        this.summon(this.def.bossSummon ?? 'zombie', 4 + Math.floor(g.day / 4), '#9a7cff');
         if (g.day >= 10) this.summon('spitter', 2, '#9a7cff');
         break;
       case 1:
@@ -425,7 +443,7 @@ export class Enemy {
     const g = this.g;
     if (step % 2 === 1) {
       for (const p of g.players) {
-        if (p.dead || dist(this.x, this.y, p.x, p.y) > 1100) continue;
+        if (p.dead || dist(this.x, this.y, p.x, p.y) > 1100 || regionAt(g, p.x, p.y) !== this.dungeon) continue;
         for (let i = 0; i < (this.enraged ? 4 : 3); i++) {
           const x = p.x + (i ? rand(-110, 110) : 0), y = p.y + (i ? rand(-110, 110) : 0);
           g.zones.push({ id: g.nextId(), kind: 'hazard', x, y, t: 0, r: 70, life: 1.3 + i * 0.25, dmg: 30 * this.dmgMul, color: '#ff6a2a' });
@@ -439,7 +457,7 @@ export class Enemy {
       this.startSlam(150, 35, 50, '#ff7a2a', 0.8);
       return;
     }
-    this.summon(g.day >= 10 ? 'sapper' : 'zombie', 4, '#ff7a2a');
+    this.summon(this.def.bossSummon ?? 'zombie', 4, this.def.color);
   }
 
   private startSlam(r: number, dmg: number, bld: number, color: string, delay: number): void {
@@ -461,6 +479,8 @@ export class Enemy {
     for (let i = 0; i < n; i++) {
       const a = rand(0, TAU);
       const e = new Enemy(g, type, this.x + Math.cos(a) * 60, this.y + Math.sin(a) * 60, g.day);
+      if (this.dungeon) { e.dungeon = this.dungeon; e.home = { x: this.x, y: this.y }; }
+      g.world.collide(e, false);
       g.enemies.push(e);
       g.fx.particles(e.x, e.y, 10, color, 120, 0.5, 4);
     }

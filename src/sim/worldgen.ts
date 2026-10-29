@@ -1,4 +1,4 @@
-import { MAP_H, MAP_W } from '../config';
+import { GRID_H, MAP_H, MAP_W } from '../config';
 import { hash2, mulberry32, TAU } from '../core/math';
 import { idx, type World } from './world';
 
@@ -9,7 +9,10 @@ export const GROUND = {
   grassFlowers: 4,
   grassPebbles: 5,
   dirt: [6, 7, 8],
-  count: 9,
+  /** Dungeon interiors: stone floor per theme (crypt, warren, depths), and solid rock. */
+  floor: [9, 10, 11],
+  wall: 12,
+  count: 13,
 } as const;
 
 export function generateWorld(w: World, seed: number): void {
@@ -29,6 +32,12 @@ export function generateWorld(w: World, seed: number): void {
       }
       w.ground[idx(x, y)] = v;
     }
+  }
+
+  // Below the map: solid rock, until generateDungeons carves the interiors out of it.
+  for (let y = MAP_H; y < GRID_H; y++) for (let x = 0; x < MAP_W; x++) {
+    w.ground[idx(x, y)] = GROUND.wall;
+    w.wall[idx(x, y)] = 1;
   }
 
   w.hearth = w.place('hearth', cx - 1, cy - 1, null);

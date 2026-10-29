@@ -6,6 +6,13 @@ export const MAP_W = 80;
 export const MAP_H = 80;
 export const WORLD_W = MAP_W * TILE;
 export const WORLD_H = MAP_H * TILE;
+// Dungeon interiors live in a walled-off strip of the grid below the map, out of the overworld's
+// sight: DUNGEON_GAP rows of solid rock, then DUNGEON_ROWS rows split into one slot per dungeon.
+export const DUNGEON_GAP = 6;
+export const DUNGEON_ROWS = 40;
+export const GRID_H = MAP_H + DUNGEON_GAP + DUNGEON_ROWS;
+/** Height of everything, interiors included (WORLD_H is just the overworld). */
+export const FULL_H = GRID_H * TILE;
 
 export const STEP = 1 / 60;             // fixed simulation timestep (seconds)
 

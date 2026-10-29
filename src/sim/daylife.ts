@@ -12,13 +12,14 @@ import { Enemy } from './enemy';
 import type { Game } from './game';
 import type { Player } from './player';
 import { distToBuilding, tileOf } from './world';
+import { dungeonById, enterDungeon, entryLabel, entryLock, leaveDungeon, nearDungeon, regionAt } from './dungeons';
 
 export interface Camp { id: number; x: number; y: number; guardIds: number[]; opened: boolean }
 export interface Npc { id: number; kind: NpcKind; x: number; y: number }
 export interface Pickup { id: number; x: number; y: number }
 
 export interface Interactable {
-  kind: 'merchant' | 'traveller' | 'chest' | 'forge';
+  kind: 'merchant' | 'traveller' | 'chest' | 'dungeon' | 'exit' | 'forge';
   id: number;
   x: number;
   y: number;
@@ -38,6 +39,7 @@ function openSpot(g: Game, minT: number, maxT: number, avoid: { x: number; y: nu
     if (tx < 3 || ty < 3 || tx > MAP_W - 4 || ty > MAP_H - 4) continue;
     const x = (tx + 0.5) * TILE, y = (ty + 0.5) * TILE;
     if (avoid.some(o => dist(o.x, o.y, x, y) < gap)) continue;
+    if (nearDungeon(g, x, y, 4 * TILE)) continue;
     if (g.world.blocked(tx, ty) && gap === 0) continue;
     return { x, y };
   }
@@ -148,6 +150,10 @@ export function nearestInteractable(g: Game, p: Player): Interactable | null {
   // The forge is the Hearth itself: measured from its edge, as it's big.
   const h = g.world.hearth;
   offer({ kind: 'forge', id: h.id, x: h.x, y: h.y, label: 'Use the Legendary Forge' }, distToBuilding(p, h) + 25);
+  for (const d of g.dungeons) {
+    offer({ kind: 'dungeon', id: d.id, x: d.x, y: d.y, label: entryLabel(d), locked: entryLock(g, d) ?? undefined });
+    offer({ kind: 'exit', id: d.id, x: d.exit.x, y: d.exit.y, label: 'Leave the dungeon' });
+  }
   for (const c of g.camps) {
     if (c.opened) continue;
     offer({ kind: 'chest', id: c.id, x: c.x, y: c.y, label: 'Open the treasure chest',
@@ -176,6 +182,16 @@ export function interact(g: Game, p: Player): void {
     case 'forge':
       g.events.emit('forge', { to: p.id });
       break;
+    case 'dungeon': {
+      const d = dungeonById(g, it.id);
+      if (d && regionAt(g, p.x, p.y) === 0) enterDungeon(g, p, d);
+      break;
+    }
+    case 'exit': {
+      const d = dungeonById(g, it.id);
+      if (d && regionAt(g, p.x, p.y) === d.id) leaveDungeon(g, p, d);
+      break;
+    }
   }
 }
 
