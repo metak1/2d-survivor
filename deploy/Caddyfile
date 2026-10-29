@@ -1,0 +1,8 @@
+# Caddy in front of the game server: automatic HTTPS (so the game uses secure wss://), and
+# WebSockets are proxied without extra settings. Replace the domain, point its DNS at the
+# server, and run the game with HOST=127.0.0.1 so only Caddy can reach it.
+
+game.example.com {
+	encode gzip
+	reverse_proxy 127.0.0.1:3000
+}

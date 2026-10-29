@@ -1,0 +1,8 @@
+node_modules
+dist
+dist-server
+legacy
+.git
+*.log
+data
+# public/assets/ is needed in the image, so it is not ignored here.
