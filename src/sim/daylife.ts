@@ -11,14 +11,14 @@ import { chestDrop, merchantWares } from './items';
 import { Enemy } from './enemy';
 import type { Game } from './game';
 import type { Player } from './player';
-import { tileOf } from './world';
+import { distToBuilding, tileOf } from './world';
 
 export interface Camp { id: number; x: number; y: number; guardIds: number[]; opened: boolean }
 export interface Npc { id: number; kind: NpcKind; x: number; y: number }
 export interface Pickup { id: number; x: number; y: number }
 
 export interface Interactable {
-  kind: 'merchant' | 'traveller' | 'chest';
+  kind: 'merchant' | 'traveller' | 'chest' | 'forge';
   id: number;
   x: number;
   y: number;
@@ -136,8 +136,7 @@ export function updateDaylife(g: Game, dt: number): void {
 export function nearestInteractable(g: Game, p: Player): Interactable | null {
   if (p.dead) return null;
   let best: Interactable | null = null, bd = INTERACT_RANGE;
-  const offer = (it: Interactable) => {
-    const d = dist(p.x, p.y, it.x, it.y);
+  const offer = (it: Interactable, d = dist(p.x, p.y, it.x, it.y)) => {
     if (d < bd) { bd = d; best = it; }
   };
   for (const n of g.npcs) {
@@ -146,6 +145,9 @@ export function nearestInteractable(g: Game, p: Player): Interactable | null {
       : { kind: 'traveller', id: n.id, x: n.x, y: n.y, label: 'Help the traveller',
           locked: recruitCount(g, p) >= allySlots(p) ? 'No free companion slot' : undefined });
   }
+  // The forge is the Hearth itself: measured from its edge, as it's big.
+  const h = g.world.hearth;
+  offer({ kind: 'forge', id: h.id, x: h.x, y: h.y, label: 'Use the Legendary Forge' }, distToBuilding(p, h) + 25);
   for (const c of g.camps) {
     if (c.opened) continue;
     offer({ kind: 'chest', id: c.id, x: c.x, y: c.y, label: 'Open the treasure chest',
@@ -170,6 +172,9 @@ export function interact(g: Game, p: Player): void {
       break;
     case 'chest':
       openChest(g, p, g.camps.find(c => c.id === it.id)!);
+      break;
+    case 'forge':
+      g.events.emit('forge', { to: p.id });
       break;
   }
 }

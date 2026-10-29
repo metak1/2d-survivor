@@ -429,3 +429,24 @@ h1 { font-family: var(--title); font-size: clamp(36px, 7vw, 68px); margin: 0; co
 @media (max-width: 640px) {
   .res-party th:nth-child(4), .res-party td:nth-child(4), .board-table th:nth-child(6), .board-table td:nth-child(6) { display: none; }
 }
+
+/* ------------------------------ Legendary Forge -------------------------- */
+.forge-modal { max-width: 1060px; }
+.forge-body { display: grid; grid-template-columns: 1.15fr 1fr; gap: 20px; }
+.forge-body h3 { margin: 0 0 8px; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .05em; }
+#forge-legends, #forge-gear { display: grid; gap: 6px; max-height: 58vh; overflow-y: auto; padding-right: 4px;
+  scrollbar-color: rgba(255,255,255,.2) transparent; scrollbar-width: thin; }
+.fl-card, .fg-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,.04); }
+.fl-card.unknown { opacity: .45; }
+.fl-ico { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 8px; flex: none;
+  background: rgba(255,154,58,.12); box-shadow: inset 0 0 0 1px rgba(255,154,58,.5); }
+.fl-card.unknown .fl-ico { background: rgba(255,255,255,.05); box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); color: var(--muted); font-weight: 700; }
+.fl-txt, .fg-txt { flex: 1; display: flex; flex-direction: column; min-width: 0; font-size: 12px; color: var(--muted); }
+.fl-txt b { color: #ff9a3a; font-size: 14px; }
+.fg-txt b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fl-rank { color: var(--gold); font-size: 12px; margin-left: 4px; }
+.fl-card button, .fg-row button { flex: none; padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(255,154,58,.5);
+  background: rgba(255,154,58,.12); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.fl-card button:hover:not(:disabled), .fg-row button:hover:not(:disabled) { background: rgba(255,154,58,.25); }
+.fl-card button:disabled, .fg-row button:disabled { opacity: .4; cursor: not-allowed; }
+@media (max-width: 860px) { .forge-body { grid-template-columns: 1fr; } }

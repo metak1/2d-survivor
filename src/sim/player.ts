@@ -7,7 +7,7 @@ import type { Item } from './items';
 
 export interface RunRecord { dmg: number; heal: number; taken: number; kills: number; deaths: number; best: Item | null }
 import { angleDiff, dist } from '../core/math';
-import { canLearn, canUnlearn, computeStats } from './stats';
+import { canLearn, canUnlearn, computeStats, legendBonus } from './stats';
 import { applyDot, BLEED_COLOR, BURN_COLOR, burnMul, damageEnemy, dealPlayerDamage, enemiesInRadius, explode } from './combat';
 import { basicAttack, castSpell, channelBeam, channelMend, fireAimedShot, fireArrowFan } from './spells';
 import { guardianSpirit, hasCompanions, syncSummons } from './ally';
@@ -79,6 +79,9 @@ export class Player {
   /** What we're wearing, and what we're carrying (up to BAG_SIZE). */
   equip: Partial<Record<ItemSlot, Item>> = {};
   bag: Item[] = [];
+  /** Legendaries discovered this run (craftable at the forge), and Legendary Shards to spend there. */
+  codex = new Set<string>();
+  shards = 0;
   /** What this player did this run, for the end screen. */
   run: RunRecord = { dmg: 0, heal: 0, taken: 0, kills: 0, deaths: 0, best: null };
   /** Aegis of Dawn recharge. */
@@ -237,7 +240,7 @@ export class Player {
   hurt(dmg: number, src?: Enemy): void {
     if (this.dead || this.invuln > 0) return;
     const g = this.g, s = this.stats, f = s.flags;
-    if (f.has('evasion') && Math.random() < 0.08 * s.ranks.evasion) {
+    if (f.has('evasion') && Math.random() < 0.08 * s.ranks.evasion + 0.02 * legendBonus(s, 'windwalkers')) {
       g.fx.text(this.x, this.y - 22, 'Dodge', '#d8f0c8', 13);
       return;
     }
@@ -282,7 +285,7 @@ export class Player {
     }
     if (f.has('phoenix') && !this.nightUsed.has('phoenix')) {
       this.nightUsed.add('phoenix');
-      this.hp = s.maxHp * 0.5;
+      this.hp = s.maxHp * (0.5 + 0.1 * legendBonus(s, 'phoenix'));
       this.invuln = 1.5;
       explode(g, this.x, this.y, 170 * s.aoe, 120, { team: 'player', owner: this.id, color: '#ff8a3a', knock: 400, burn: 14, tag: 'other' });
       g.fx.text(this.x, this.y - 34, 'PHOENIX!', '#ffb347', 18, 1.4);
@@ -407,7 +410,7 @@ export class Player {
     }
     if (f.has('item_dawn') && (this.dawnT -= dt) <= 0) {
       this.dawnT = 12;
-      this.shield(s.maxHp * 0.15, 6);
+      this.shield(s.maxHp * (0.15 + 0.025 * legendBonus(s, 'aegis')), 6);
     }
     if (f.has('infernoaura') && (this.auraT -= dt) <= 0) {
       this.auraT = 0.5;

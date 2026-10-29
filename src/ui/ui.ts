@@ -8,7 +8,7 @@ import { RES_ICONS } from '../data/enemies';
 import { SHOP } from '../data/events';
 import type { AltDef, BasicAttackDef, BuildSlot, ClassId, Cost, ResKey, SpellDef } from '../data/types';
 import { Input } from '../core/input';
-import { App, closeInventory, closeShop, closeTalents, command, me, openInventory, openTalents, resume, setBuildMode, startGame, toMenu } from '../app';
+import { App, closeForge, closeInventory, closeShop, closeTalents, command, me, openInventory, openTalents, resume, setBuildMode, startGame, toMenu } from '../app';
 import { InventoryScreen, itemTipHtml } from './inventory';
 import { RARITIES } from '../data/items';
 import { itemIcon, itemName, itemPrice } from '../sim/items';
@@ -21,6 +21,7 @@ import type { Building } from '../sim/world';
 import { iconHtml } from './icons';
 import { Minimap } from './minimap';
 import { TalentScreen } from './talents';
+import { ForgeScreen } from './forge';
 import { BoardScreen, heirloomHtml, rankHtml, resultsHtml, runResult } from './results';
 import { heirloomFor, nextHeirloom, recordRun } from '../profile';
 import { submitSolo, type Submitted } from '../net/scores';
@@ -72,6 +73,8 @@ class UIController {
   /** What the talent screen and shop last showed, to redraw them when a snapshot changes it. */
   private talentKey = '';
   private shopKey = '';
+  private forge = new ForgeScreen();
+  private forgeKey = '';
   private board = new BoardScreen();
   /** This run on the leaderboard: our solo submission, and the rank it got (solo or from the server). */
   private submitted: Submitted | null = null;
@@ -87,6 +90,8 @@ class UIController {
     this.inventory.init();
     $('btn-open-inventory').onclick = () => openInventory();
     $('btn-inventory-close').onclick = () => closeInventory();
+    this.forge.init();
+    $('btn-forge-close').onclick = () => closeForge();
     $('btn-resume').onclick = () => resume();
     $('btn-restart').onclick = () => startGame(App.cls);
     $('btn-menu').onclick = () => toMenu();
@@ -113,7 +118,7 @@ class UIController {
   // ----------------------------- Screens ----------------------------------
 
   hideScreens(): void {
-    for (const id of ['menu', 'hub', 'lobby', 'pause', 'talents', 'inventory', 'shop', 'gameover', 'board', 'loading']) $(id).classList.add('hidden');
+    for (const id of ['menu', 'hub', 'lobby', 'pause', 'talents', 'inventory', 'shop', 'forge', 'gameover', 'board', 'loading']) $(id).classList.add('hidden');
     this.talents.hideTip();
     this.inventory.hideTip();
   }
@@ -148,6 +153,12 @@ class UIController {
     this.inventoryKey = this.inventory.state();
     this.seenBag = me().bag.length;
     $('inventory').classList.remove('hidden');
+  }
+
+  showForge(): void {
+    this.forge.render(this.game!);
+    this.forgeKey = this.forge.state(this.game!);
+    $('forge').classList.remove('hidden');
   }
 
   showShop(): void {
@@ -309,6 +320,7 @@ class UIController {
     $('talent-alert').classList.toggle('hidden', p.points <= 0);
     setText($('talent-count'), String(p.points));
     for (const k of ['wood', 'stone', 'gold'] as ResKey[]) setText($('res-' + k), String(Math.floor(g.res[k])));
+    setText($('res-shards'), String(me().shards));
 
     const night = g.phase === 'night', rem = Math.max(0, g.phaseLen - g.phaseTime);
     const of = g.won ? ' · Endless' : ` / ${FINAL_NIGHT}`;
@@ -637,6 +649,9 @@ class UIController {
       if (key !== this.inventoryKey) { this.inventoryKey = key; this.inventory.render(g); this.seenBag = me().bag.length; }
     } else if (App.mode === 'shop' && this.shopState(g) !== this.shopKey) {
       this.renderShop();
+    } else if (App.mode === 'forge') {
+      const key = this.forge.state(g);
+      if (key !== this.forgeKey) { this.forgeKey = key; this.forge.render(g); }
     }
     // New loot since we last opened the bag.
     const fresh = Math.max(0, me().bag.length - this.seenBag);

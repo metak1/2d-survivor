@@ -2,8 +2,9 @@
 // (so it can be sent over the network); what it does comes from its mods and flag, which
 // computeStats adds to the player's stats.
 
+import { ROMAN } from '../data/buildings';
 import {
-  AFFIXES, BAG_SIZE, BASES, EXTRA_STAT_LABELS, LEGENDARIES, RARITIES, RARITY_ORDER, SLOT_ICONS, SLOT_NAMES,
+  AFFIXES, BAG_SIZE, FORGE, BASES, EXTRA_STAT_LABELS, LEGENDARIES, RARITIES, RARITY_ORDER, SLOT_ICONS, SLOT_NAMES,
   type ItemSlot, type Rarity, ITEM_SLOTS,
 } from '../data/items';
 import type { ClassId, StatKey } from '../data/types';
@@ -24,8 +25,9 @@ export interface Item {
   flag?: string;
   prefix?: string;
   suffix?: string;
-  /** Legendary id, if it is one. */
+  /** Legendary id, if it is one, and its rank (I to V, raised at the forge). */
   legend?: string;
+  rank?: number;
 }
 
 /** An item lying on the ground. */
@@ -35,12 +37,18 @@ export interface Loot { id: number; x: number; y: number; item: Item; t: number 
 const MAX_LOOT = 60;
 const PICKUP_RANGE = 34;
 
-const levelMul = (ilvl: number) => 1 + 0.12 * (ilvl - 1);
+export const levelMul = (ilvl: number) => 1 + 0.12 * (ilvl - 1);
 /** Percentages to a tenth of a percent; health and thorns to whole numbers; regeneration to a tenth. */
 const round = (stat: StatKey, v: number, pct: boolean) =>
   pct ? Math.round(v * 1000) / 1000 : stat === 'regen' ? Math.round(v * 10) / 10 : Math.max(1, Math.round(v));
+const PCT_STATS = new Set<StatKey>(['allyPow', 'wallHp', ...AFFIXES.filter(a => a.pct).map(a => a.stat)]);
+/** Rounds a stat the way rolled items show it. */
+export const roundStat = (stat: StatKey, v: number) => round(stat, v, PCT_STATS.has(stat));
 
-/** Picks a rarity; `luck` shifts the odds toward better ones (Blood Moon, bosses, chests). */
+/**
+ * Picks a rarity; `luck` shifts the odds toward better ones (Blood Moon, bosses, chests).
+ * Legendaries are never rolled: they're crafted at the forge (sim/forge.ts), so the roll stops at epic.
+ */
 export function rollRarity(luck = 0, min: Rarity = 'common'): Rarity {
   const from = RARITY_ORDER.indexOf(min);
   const pool = RARITY_ORDER.slice(from);
@@ -50,11 +58,11 @@ export function rollRarity(luck = 0, min: Rarity = 'common'): Rarity {
   return pool[pool.length - 1];
 }
 
-export function makeItem(g: Game, ilvl: number, rarity: Rarity, slot: ItemSlot = choice(ITEM_SLOTS)): Item {
+export function makeItem(g: Game, ilvl: number, rarity: Rarity, slot: ItemSlot = choice(ITEM_SLOTS), legend?: string): Item {
   const r = RARITIES[rarity], item: Item = { id: g.nextId(), slot, rarity, ilvl, look: Math.floor(Math.random() * 1000), mods: {} };
   const add = (stat: StatKey, v: number) => { item.mods[stat] = (item.mods[stat] ?? 0) + v; };
   if (rarity === 'legendary') {
-    const L = choice(LEGENDARIES.filter(l => l.slot === slot)) ?? choice(LEGENDARIES);
+    const L = LEGENDARIES.find(l => l.id === legend) ?? choice(LEGENDARIES.filter(l => l.slot === slot)) ?? choice(LEGENDARIES);
     item.slot = L.slot;
     item.legend = L.id;
     item.flag = L.flag;
@@ -75,7 +83,7 @@ export function makeItem(g: Game, ilvl: number, rarity: Rarity, slot: ItemSlot =
 // ----------------------------------------------------------------- names and text
 
 export function itemName(item: Item, cls: ClassId): string {
-  if (item.legend) return LEGENDARIES.find(l => l.id === item.legend)!.name;
+  if (item.legend) return LEGENDARIES.find(l => l.id === item.legend)!.name + ((item.rank ?? 1) > 1 ? ` ${ROMAN[item.rank! - 1]}` : '');
   const set = BASES[item.slot], bases = set[cls] ?? set.any!;
   const base = bases[item.look % bases.length];
   return [item.prefix, base, item.suffix].filter(Boolean).join(' ');
@@ -99,9 +107,16 @@ export function statLine(stat: StatKey, v: number): string {
   return pct ? `+${Math.round(v * 1000) / 10}% ${label}` : `+${Math.round(v * 10) / 10} ${label}`;
 }
 
-export const legendText = (item: Item) => (item.legend ? LEGENDARIES.find(l => l.id === item.legend)!.desc : '');
+export const legendText = (item: Item) => (item.legend ? LEGENDARIES.find(l => l.id === item.legend)!.desc(item.rank ?? 1) : '');
 export const slotName = (item: Item) => SLOT_NAMES[item.slot];
-export const salvageValue = (item: Item) => Math.round(RARITIES[item.rarity].salvage * levelMul(item.ilvl));
+export const salvageValue = (item: Item) => (item.legend ? 0 : Math.round(RARITIES[item.rarity].salvage * levelMul(item.ilvl)));
+/** Legendary Shards back from salvaging. */
+export const salvageShards = (item: Item) => (item.legend ? FORGE.salvageLegend : item.rarity === 'epic' ? FORGE.salvageEpic : 0);
+/** "12 gold and 1 shard". */
+export function salvageText(item: Item): string {
+  const gold = salvageValue(item), sh = salvageShards(item);
+  return [gold ? `${gold} gold` : '', sh ? `${sh} Legendary Shard${sh === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ');
+}
 export const itemPrice = (item: Item) => Math.round(RARITIES[item.rarity].price * (1 + 0.1 * (item.ilvl - 1)));
 
 // ----------------------------------------------------------------- drops
@@ -113,15 +128,20 @@ export function dropLoot(g: Game, x: number, y: number, item: Item): void {
   g.events.emit('vfx', { kind: 'ring', x, y, r: item.rarity === 'common' ? 14 : 26, color: col, life: 0.5 });
 }
 
-/** A monster died: maybe it drops something. Tougher monsters drop more often; bosses always. */
+/**
+ * A monster died: maybe it drops something. Tougher monsters drop more often. Night bosses drop an
+ * epic (and reward shards and a legendary discovery, see forge.ts).
+ */
 export function monsterDrop(g: Game, e: Enemy): void {
   const d = e.def;
   const chance = d.boss ? 1 : d.guard ? 0.45 : Math.min(0.35, 0.035 * Math.max(1, d.cost));
   if (Math.random() > chance) return;
   const luck = (g.bloodMoon ? 0.6 : 0) + (d.boss ? 1.5 : d.guard ? 0.5 : 0) + 0.03 * g.day;
-  const min: Rarity = d.boss ? 'rare' : 'common';
-  dropLoot(g, e.x, e.y, makeItem(g, g.day, rollRarity(luck, min)));
-  if (d.boss) dropLoot(g, e.x, e.y, makeItem(g, g.day, rollRarity(luck, 'epic')));
+  if (d.boss) {
+    dropLoot(g, e.x, e.y, makeItem(g, g.day, rollRarity(luck, 'epic')));
+    return;
+  }
+  dropLoot(g, e.x, e.y, makeItem(g, g.day, rollRarity(luck)));
 }
 
 /** A treasure chest spills one or two items. */
@@ -193,9 +213,10 @@ export function salvageItem(g: Game, p: Player, index: number): boolean {
   const item = p.bag[index];
   if (!item) return false;
   p.bag.splice(index, 1);
-  const gold = salvageValue(item);
+  const gold = salvageValue(item), shards = salvageShards(item);
   g.res.gold += gold;
-  g.fx.text(p.x, p.y - 30, `+${gold} 🪙`, '#ffe27a', 13);
+  p.shards += shards;
+  g.fx.text(p.x, p.y - 30, [gold ? `+${gold} 🪙` : '', shards ? `+${shards} 💠` : ''].filter(Boolean).join(' '), '#ffe27a', 13);
   return true;
 }
 

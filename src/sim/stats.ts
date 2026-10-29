@@ -3,12 +3,15 @@ import { TALENTS, TALENT_GATES } from '../data/talents';
 import type { ClassId, Stats, StatKey, TalentNode, TalentTree } from '../data/types';
 import type { Item } from './items';
 
-const BASE: Omit<Stats, 'flags' | 'ranks'> = {
+const BASE: Omit<Stats, 'flags' | 'ranks' | 'legend'> = {
   maxHp: 0, regen: 0, dmgMul: 1, moveMul: 1, cdr: 0, crit: 0.05, atkSpeed: 1,
   buildCost: 1, wallHp: 1, towerDmg: 1, towerSpeed: 1, aoe: 1, pierce: 0, extraProj: 0,
   lifesteal: 0, armor: 0, thorns: 0, gather: 1, freezeBonus: 0, arcMul: 1, rangeMul: 1,
-  allyMax: 0, allyPow: 1, goldMul: 1, towerHp: 1, towerRange: 1, healMul: 1,
+  allyMax: 0, allyPow: 1, goldMul: 1, towerHp: 1, towerRange: 1, healMul: 1, legendRank: 0,
 };
+
+/** Ranks above I of the legendary `id`, if it's the one being worn (its effect grows with them). */
+export const legendBonus = (s: Stats, id: string) => (s.legend === id ? s.legendRank - 1 : 0);
 
 /** A class's stats with its learned talents and the items it's wearing. */
 export function computeStats(cls: ClassId, talents: Record<string, number>, items: Item[] = []): Stats {
@@ -29,6 +32,7 @@ export function computeStats(cls: ClassId, talents: Record<string, number>, item
   }
   for (const item of items) {
     for (const k in item.mods) s[k as StatKey] += item.mods[k as StatKey]!;
+    if (item.legend) { s.legend = item.legend; s.legendRank = item.rank ?? 1; }
     if (item.flag) {
       s.flags.add(item.flag);
       s.ranks[item.flag] = (s.ranks[item.flag] || 0) + 1;

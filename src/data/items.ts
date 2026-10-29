@@ -97,34 +97,66 @@ export interface LegendaryDef {
   name: string;
   slot: ItemSlot;
   icon: number;
+  /** Stats at rank I; each rank above adds LEGEND_RANK_STEP of them (see rankMul). */
   mods: Partial<Record<StatKey, number>>;
   /** Behaviour switch, read like a talent flag. */
   flag?: string;
-  desc: string;
+  /** What it does at rank `r` (1 to LEGEND_MAX_RANK). */
+  desc: (r: number) => string;
 }
+
+/** Legendaries are crafted at the Hearth's forge and empowered from rank I to V. */
+export const LEGEND_MAX_RANK = 5;
+/** Extra share of a legendary's own stats per rank above I (rank V: +80%). */
+export const LEGEND_RANK_STEP = 0.2;
+export const rankMul = (r: number) => 1 + LEGEND_RANK_STEP * (r - 1);
+const pct = (v: number) => `${Math.round(v * 10) / 10}%`;
 
 export const LEGENDARIES: LegendaryDef[] = [
   { id: 'bloodfang', name: 'Bloodfang', slot: 'weapon', icon: 1588, mods: { dmgMul: 0.1, lifesteal: 0.04 }, flag: 'reaper',
-    desc: 'Every kill heals you for 4% of your maximum health.' },
+    desc: r => `Every kill heals you for ${pct(4 + (r - 1))} of your maximum health.` },
   { id: 'stormcaller', name: 'Stormcaller', slot: 'weapon', icon: 1602, mods: { atkSpeed: 0.12 }, flag: 'item_chain',
-    desc: 'Your hits have a 15% chance to fork lightning into 3 more enemies.' },
+    desc: r => `Your hits have a ${pct(15 + 2.5 * (r - 1))} chance to fork lightning into 3 more enemies.` },
   { id: 'phoenix', name: 'Phoenix Plume', slot: 'helm', icon: 1915, mods: { maxHp: 30 }, flag: 'phoenix',
-    desc: 'Once per night, instead of falling you explode in flame and rise at 50% health.' },
+    desc: r => `Once per night, instead of falling you explode in flame and rise at ${pct(50 + 10 * (r - 1))} health.` },
   { id: 'crown', name: 'Crown of Ages', slot: 'helm', icon: 1910, mods: { cdr: 0.12 }, flag: 'chrono',
-    desc: 'Each kill takes 0.2s off all your spell cooldowns.' },
+    desc: r => `Each kill takes ${Math.round((0.2 + 0.05 * (r - 1)) * 100) / 100}s off all your spell cooldowns.` },
   { id: 'aegis', name: 'Aegis of Dawn', slot: 'armor', icon: 1931, mods: { armor: 0.08, maxHp: 40 }, flag: 'item_dawn',
-    desc: 'Every 12s you gain a shield worth 15% of your maximum health.' },
+    desc: r => `Every 12s you gain a shield worth ${pct(15 + 2.5 * (r - 1))} of your maximum health.` },
   { id: 'bastion', name: 'Heart of the Bastion', slot: 'armor', icon: 1866, mods: { thorns: 20, wallHp: 0.25, towerDmg: 0.15 },
-    desc: 'Your walls have 25% more health and your towers deal 15% more damage.' },
+    desc: r => `Your walls have ${pct(25 * rankMul(r))} more health and your towers deal ${pct(15 * rankMul(r))} more damage.` },
   { id: 'windwalkers', name: 'Windwalkers', slot: 'boots', icon: 1942, mods: { moveMul: 0.15 }, flag: 'evasion',
-    desc: '8% chance to dodge an attack entirely.' },
+    desc: r => `${pct(8 + 2 * (r - 1))} chance to dodge an attack entirely.` },
   { id: 'warband', name: 'Ring of the Warband', slot: 'ring', icon: 1845, mods: { allyMax: 1, allyPow: 0.3 },
-    desc: '+1 companion slot, and companions have 30% more health and damage.' },
+    desc: r => `+1 companion slot, and companions have ${pct(30 * rankMul(r))} more health and damage.` },
   { id: 'frostbite', name: 'Frostbite Band', slot: 'ring', icon: 1846, mods: { crit: 0.05 }, flag: 'item_frost',
-    desc: 'Your hits have a 10% chance to freeze enemies for 0.8s.' },
+    desc: r => `Your hits have a ${pct(10 + 2.5 * (r - 1))} chance to freeze enemies for 0.8s.` },
   { id: 'signet', name: 'Gilded Signet', slot: 'ring', icon: 1843, mods: { goldMul: 0.4, gather: 0.3 },
-    desc: 'Monsters drop 40% more gold and you gather 30% more resources.' },
+    desc: r => `Monsters drop ${pct(40 * rankMul(r))} more gold and you gather ${pct(30 * rankMul(r))} more resources.` },
 ];
+
+/** Stats a rank doesn't scale (a companion slot stays one slot). */
+export const RANK_FIXED: StatKey[] = ['allyMax'];
+
+/**
+ * Legendary Shards: dropped by bosses, spent at the Hearth's forge. Crafting a discovered
+ * legendary, empowering it (cost to reach each rank), rerolling an item's stats and raising its
+ * item level (per level, by rarity).
+ */
+export const FORGE = {
+  craft: 12,
+  empower: [0, 0, 8, 12, 16, 20] as number[],
+  reroll: { common: 1, magic: 1, rare: 2, epic: 3, legendary: 4 } as Record<Rarity, number>,
+  upgrade: { common: 1, magic: 1, rare: 1, epic: 2, legendary: 2 } as Record<Rarity, number>,
+  /** Shards back for salvaging a legendary (or an epic). */
+  salvageLegend: 6,
+  salvageEpic: 1,
+  /** Shards for a night boss kill, a dungeon boss kill (plus per depth and theme), and per kill once the collection is complete. */
+  nightBoss: 8,
+  dungeonBoss: 5,
+  perDepth: 2,
+  complete: 4,
+};
 
 /** Labels for stats that only legendaries give. */
 export const EXTRA_STAT_LABELS: Partial<Record<StatKey, { label: string; pct: boolean }>> = {

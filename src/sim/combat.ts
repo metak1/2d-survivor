@@ -7,6 +7,9 @@ import type { Game } from './game';
 import type { Player } from './player';
 import { hasCompanions } from './ally';
 import { healFriend, mostWounded } from './heal';
+import { bossReward } from './forge';
+import { legendBonus } from './stats';
+import { FORGE } from '../data/items';
 import { monsterDrop } from './items';
 import { distToBuilding } from './world';
 
@@ -136,9 +139,10 @@ export function dealPlayerDamage(g: Game, p: Player, e: Enemy, base: number, o: 
 /** Legendary on-hit effects (Frostbite Band, Stormcaller). */
 function itemOnHit(g: Game, p: Player, e: Enemy, base: number, tag?: HitTag): void {
   const f = p.stats.flags;
-  if (f.has('item_frost') && !e.dead && !e.def.boss && Math.random() < 0.1) e.freeze = Math.max(e.freeze, 0.8);
+  const s = p.stats;
+  if (f.has('item_frost') && !e.dead && !e.def.boss && Math.random() < 0.1 + 0.025 * legendBonus(s, 'frostbite')) e.freeze = Math.max(e.freeze, 0.8);
   // Lightning doesn't fork off its own forks.
-  if (!f.has('item_chain') || tag === 'chain' || Math.random() >= 0.15) return;
+  if (!f.has('item_chain') || tag === 'chain' || Math.random() >= 0.15 + 0.025 * legendBonus(s, 'stormcaller')) return;
   const points = [{ x: e.x, y: e.y }], hit = new Set([e.id]);
   let from: Enemy = e;
   for (let j = 0; j < 3; j++) {
@@ -213,6 +217,7 @@ function killEnemy(g: Game, e: Enemy, o: HitOpts): void {
   for (const p of g.players) p.gainXp((e.def.xp * mul) / g.partyMul);
   monsterDrop(g, e);
   if (e.def.boss) {
+    bossReward(g, g.players, FORGE.nightBoss);
     g.fx.shake(20);
     g.fx.toast(`The ${e.def.name} is slain! +60 wood, +40 stone`);
     g.res.wood += 60;
@@ -239,12 +244,12 @@ function onKill(g: Game, e: Enemy, o: HitOpts): void {
   const p = o.by;
   if (!p) return;
   const s = p.stats, f = s.flags;
-  if (f.has('reaper')) p.heal(s.maxHp * 0.04, true);
+  if (f.has('reaper')) p.heal(s.maxHp * (0.04 + 0.01 * legendBonus(s, 'bloodfang')), true);
   if (f.has('bloodlust')) {
     p.buffs.lust = 6;
     p.lustStacks = Math.min(5, p.lustStacks + 1);
   }
-  if (f.has('chrono')) p.reduceCooldowns(0.2);
+  if (f.has('chrono')) p.reduceCooldowns(0.2 + 0.05 * legendBonus(s, 'crown'));
   if (o.tag === 'charge' && f.has('rampage') && p.rampageT <= 0) {
     p.cds.charge = 0;
     p.rampageT = 3;

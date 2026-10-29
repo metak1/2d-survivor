@@ -44,6 +44,7 @@
       <div class="res" title="Gold"><span id="res-ico-gold"></span><span id="res-gold">0</span></div>
       <button id="btn-open-talents" title="Talents">★ Talents</button>
       <button id="btn-open-inventory" title="Bag (I)">🎒 Bag<span id="bag-new" class="hidden"></span></button>
+      <div class="res" title="Your Legendary Shards: spend them at the Hearth's forge"><span>💠</span><span id="res-shards">0</span></div>
     </div>
 
     <div id="death" class="hidden"></div>
@@ -169,6 +170,28 @@
     </div>
   </div>
   <div id="item-tip" class="hidden"></div>
+
+  <!-- Legendary Forge (at the Hearth) -->
+  <div id="forge" class="screen hidden">
+    <div class="modal wide forge-modal">
+      <div class="modal-head">
+        <h2>Legendary Forge</h2>
+        <div class="points" id="forge-shards"></div>
+        <button id="btn-forge-close" class="close" title="Close">✕</button>
+      </div>
+      <div class="forge-body">
+        <div>
+          <h3>Legendaries</h3>
+          <div id="forge-legends"></div>
+        </div>
+        <div>
+          <h3>Reforge gear</h3>
+          <div id="forge-gear"></div>
+        </div>
+      </div>
+      <div class="modal-foot">Every boss reveals a legendary to the players who fought it, and drops Legendary Shards. Salvaging a legendary gives 6 shards back. Your collection lasts for this run.</div>
+    </div>
+  </div>
 
   <!-- Merchant -->
   <div id="shop" class="screen hidden">

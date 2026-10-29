@@ -35,6 +35,8 @@ export interface GameEvents {
   scout: ScoutReport;
   /** A player asked the merchant to trade. */
   shop: { to: number };
+  /** A player opened the Legendary Forge at the Hearth. */
+  forge: { to: number };
   /** Buildings or resource nodes changed (minimap, static layers). */
   worldChanged: undefined;
   gameOver: undefined;

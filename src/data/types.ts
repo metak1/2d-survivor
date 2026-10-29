@@ -103,8 +103,11 @@ export interface Stats {
   flags: Set<string>;
   /** Rank learned in each flag talent, for flags that scale per rank. */
   ranks: Record<string, number>;
+  /** The legendary being worn (one at a time) and its rank (0 when none). */
+  legend?: string;
+  legendRank: number;
 }
-export type StatKey = Exclude<keyof Stats, 'flags' | 'ranks'>;
+export type StatKey = Exclude<keyof Stats, 'flags' | 'ranks' | 'legend' | 'legendRank'>;
 
 export interface TalentDef {
   id: string;

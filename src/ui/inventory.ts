@@ -5,7 +5,7 @@
 import { BAG_SIZE, ITEM_SLOTS, RARITIES, SLOT_NAMES } from '../data/items';
 import { command, me } from '../app';
 import type { Game } from '../sim/game';
-import { itemIcon, itemLines, itemName, legendaryConflict, legendText, salvageValue, type Item } from '../sim/items';
+import { itemIcon, itemLines, itemName, legendaryConflict, legendText, salvageText, type Item } from '../sim/items';
 import type { Player } from '../sim/player';
 import { iconHtml } from './icons';
 
@@ -85,11 +85,11 @@ export class InventoryScreen {
         const wear = blocker
           ? `<div class="it-warn">Only one legendary at a time: take off ${esc(itemName(blocker, p.cls))} first</div>`
           : '';
-        this.tip(el, item, p, `${wear}<div class="it-hint">${blocker ? '' : 'Click to wear · '}Right-click to salvage for ${salvageValue(item)} gold</div>`, p.equip[item.slot]);
+        this.tip(el, item, p, `${wear}<div class="it-hint">${blocker ? '' : 'Click to wear · '}Right-click to salvage for ${salvageText(item)}</div>`, p.equip[item.slot]);
       }
       bag.appendChild(el);
     }
-    $('inv-count').textContent = `${p.bag.length} / ${BAG_SIZE}`;
+    $('inv-count').textContent = `${p.bag.length} / ${BAG_SIZE} · 💠 ${p.shards} shards`;
     $('inv-stats').innerHTML = statsHtml(p);
   }
 

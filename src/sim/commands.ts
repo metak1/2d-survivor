@@ -6,6 +6,7 @@ import { BUILD_SLOTS } from '../data/buildings';
 import { SHOP, type ShopEffect } from '../data/events';
 import { ITEM_SLOTS, type ItemSlot } from '../data/items';
 import { buyItem, equipItem, salvageItem, unequipItem } from './items';
+import { craftLegend, empower, reroll, upgrade } from './forge';
 import type { BuildSlot } from '../data/types';
 import type { Game } from './game';
 import type { Player } from './player';
@@ -24,7 +25,10 @@ export type Command =
   | { c: 'equip'; bag: number }
   | { c: 'unequip'; slot: ItemSlot }
   | { c: 'salvage'; bag: number }
-  | { c: 'buyItem'; index: number };
+  | { c: 'buyItem'; index: number }
+  /** The Legendary Forge: craft a discovered legendary, or work on an item by id. */
+  | { c: 'forge'; op: 'craft'; legend: string }
+  | { c: 'forge'; op: 'empower' | 'reroll' | 'upgrade'; item: number };
 
 const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const str = (v: unknown, max = 40): v is string => typeof v === 'string' && v.length <= max;
@@ -56,6 +60,9 @@ export function parseCommand(raw: unknown): Command | null {
       return ITEM_SLOTS.includes(c.slot as ItemSlot) ? { c: 'unequip', slot: c.slot as ItemSlot } : null;
     case 'buyItem':
       return num(c.index) ? { c: 'buyItem', index: c.index } : null;
+    case 'forge':
+      if (c.op === 'craft') return str(c.legend) ? { c: 'forge', op: 'craft', legend: c.legend } : null;
+      return (c.op === 'empower' || c.op === 'reroll' || c.op === 'upgrade') && num(c.item) ? { c: 'forge', op: c.op, item: c.item } : null;
     default:
       return null;
   }
@@ -79,5 +86,8 @@ export function applyCommand(g: Game, p: Player, cmd: Command): string | null {
     case 'unequip': return unequipItem(p, cmd.slot) ? null : 'Your bag is full';
     case 'salvage': salvageItem(g, p, cmd.bag); return null;
     case 'buyItem': return buyItem(g, p, cmd.index);
+    case 'forge':
+      if (cmd.op === 'craft') return craftLegend(g, p, cmd.legend);
+      return (cmd.op === 'empower' ? empower : cmd.op === 'reroll' ? reroll : upgrade)(g, p, cmd.item);
   }
 }

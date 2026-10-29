@@ -8,7 +8,7 @@ import { BUILDINGS, BUILD_KEYS, BUILD_SLOTS } from '../data/buildings';
 import { NPC_LOOKS } from '../data/events';
 import type { SpellId, SpriteRef } from '../data/types';
 import { Input } from '../core/input';
-import { App, closeInventory, closeShop, closeTalents, command, me, openInventory, openShop, openTalents, pause, resume, setBuildMode } from '../app';
+import { App, closeForge, closeInventory, closeShop, closeTalents, command, me, openForge, openInventory, openShop, openTalents, pause, resume, setBuildMode } from '../app';
 import { darkness } from '../sim/cycle';
 import type { Game } from '../sim/game';
 import { NO_INTENT, type Intent } from '../sim/player';
@@ -73,6 +73,7 @@ export class GameScene extends Phaser.Scene {
         if (!player) this.actors.delete(e.id);
       }),
       ev.on('shop', e => { if (mine(e.to)) openShop(); }),
+      ev.on('forge', e => { if (mine(e.to)) openForge(); }),
     ];
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.unsubscribe.forEach(u => u()));
   }
@@ -158,6 +159,7 @@ export class GameScene extends Phaser.Scene {
       if (App.mode === 'talents') closeTalents();
       else if (App.mode === 'inventory') closeInventory();
       else if (App.mode === 'shop') closeShop();
+      else if (App.mode === 'forge') closeForge();
       else if (App.mode === 'paused') resume();
       else if (b.selected !== null && Input.wasPressed('Escape')) b.selected = null;
       else if (b.active && Input.wasPressed('Escape')) setBuildMode(false);
@@ -173,6 +175,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (App.mode === 'shop' && Input.wasPressed('KeyF')) return closeShop();
+    if (App.mode === 'forge' && Input.wasPressed('KeyF')) return closeForge();
     if (App.mode !== 'playing') return;
     if (Input.wasPressed('KeyB')) setBuildMode(!b.active && !me().dead);
     if (Input.wasPressed('KeyN')) command({ c: 'callNight' });

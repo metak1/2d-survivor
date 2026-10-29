@@ -27,7 +27,7 @@ export type NetEvent = [EventName, unknown];
 
 /** Events forwarded to clients. Single-dot particles (trails, embers) are left to the client. */
 export const NET_EVENTS: EventName[] = ['particles', 'text', 'shake', 'toast', 'banner', 'vfx', 'anim', 'died', 'levelUp',
-  'scout', 'shop', 'worldChanged', 'gameOver', 'victory'];
+  'scout', 'shop', 'forge', 'worldChanged', 'gameOver', 'victory'];
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -42,6 +42,8 @@ interface PlayerSnap {
   bag?: Item[];
   /** Run totals for the end screen: about once a second, and when the run is won or over. */
   run?: RunRecord;
+  /** Discovered legendaries and Legendary Shards. */
+  codex: string[]; shards: number;
 }
 interface EnemySnap {
   id: number; type: EnemyId; x: number; y: number; hp: number; maxHp: number; angle: number; moving: boolean;
@@ -98,7 +100,7 @@ export function encodeSnapshot(g: Game, knownVersion: number, since: number, eve
       points: p.points, talents: p.talents, cds: p.cds, buffs: p.buffs, lust: p.lustStacks, barrier: r1(p.barrier),
       angle: r2(p.angle), dead: p.dead, respawn: r1(p.respawn), lastHit: p.lastHit, moving: p.moving, invuln: r2(p.invuln),
       whirl: r2(p.whirl), alt: p.altHeld, altT: r2(p.altT), altEnd: p.altEnd, atk: r2(p.atkTimer), dashing: !!p.dash, offline: p.offline,
-      equip: p.equip, bag: p.id === forPlayer ? p.bag : undefined,
+      equip: p.equip, bag: p.id === forPlayer ? p.bag : undefined, codex: [...p.codex], shards: p.shards,
       run: withRun ? { ...p.run, dmg: Math.round(p.run.dmg), heal: Math.round(p.run.heal), taken: Math.round(p.run.taken) } : undefined,
     })),
     enemies: g.enemies.filter(e => !e.dead).map(e => ({
@@ -192,6 +194,8 @@ export function applySnapshot(g: Game, s: Snapshot, interp: Interpolator, selfId
     }
     if (ps.bag) p.bag = ps.bag;
     if (ps.run) p.run = ps.run;
+    p.codex = new Set(ps.codex);
+    p.shards = ps.shards;
     Object.assign(p, {
       hp: ps.hp, level: ps.level, xp: ps.xp, points: ps.points, cds: ps.cds, buffs: ps.buffs, lustStacks: ps.lust,
       barrier: ps.barrier, dead: ps.dead, respawn: ps.respawn, lastHit: ps.lastHit,

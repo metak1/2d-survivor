@@ -13,7 +13,7 @@ import { heirloomFor } from './profile';
 
 /** hub: the online room browser; lobby: inside an online room, between runs. */
 /** victory: the run was just won (solo pauses there; online it keeps going behind the screen). */
-export type Mode = 'loading' | 'menu' | 'hub' | 'lobby' | 'playing' | 'paused' | 'talents' | 'inventory' | 'shop' | 'victory' | 'over';
+export type Mode = 'loading' | 'menu' | 'hub' | 'lobby' | 'playing' | 'paused' | 'talents' | 'inventory' | 'shop' | 'forge' | 'victory' | 'over';
 
 export interface BuildState {
   active: boolean;
@@ -137,6 +137,18 @@ export function openShop(): void {
 
 export function closeShop(): void {
   if (App.mode !== 'shop') return;
+  App.mode = 'playing';
+  UI.hideScreens();
+}
+
+export function openForge(): void {
+  if (App.mode !== 'playing') return;
+  App.mode = 'forge';
+  UI.showForge();
+}
+
+export function closeForge(): void {
+  if (App.mode !== 'forge') return;
   App.mode = 'playing';
   UI.hideScreens();
 }
