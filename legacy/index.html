@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nightfall Bastion</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- In-game HUD -->
+  <div id="hud" class="hidden">
+    <div id="hud-player" class="panel">
+      <div class="row"><b id="hud-class"></b><span id="hud-level"></span></div>
+      <div class="bar hp"><div id="hp-fill"></div><span id="hp-text"></span></div>
+      <div class="bar xp"><div id="xp-fill"></div><span id="xp-text"></span></div>
+      <button id="talent-alert" class="hidden" onclick="UI.openTalents()">
+        ★ <span id="talent-count">0</span> talent point(s) — press <kbd data-code="KeyT">T</kbd>
+      </button>
+    </div>
+
+    <div id="hud-top">
+      <div id="hud-cycle" class="panel">
+        <div id="cycle-label"></div>
+        <div class="cycle-track"><div id="cycle-fill"></div></div>
+        <div id="cycle-sub"></div>
+      </div>
+      <div id="hearth-panel" class="panel">
+        <span>🔥 Hearth</span>
+        <div class="bar hearth"><div id="hearth-fill"></div><span id="hearth-text"></span></div>
+      </div>
+    </div>
+
+    <div id="hud-res" class="panel">
+      <div class="res" title="Wood"><span class="ico">🪵</span><span id="res-wood">0</span></div>
+      <div class="res" title="Stone"><span class="ico">🪨</span><span id="res-stone">0</span></div>
+      <div class="res" title="Gold"><span class="ico">🪙</span><span id="res-gold">0</span></div>
+      <button id="btn-open-talents" title="Talents">★ Talents</button>
+    </div>
+
+    <div id="death" class="hidden"></div>
+    <div id="toasts"></div>
+    <div id="banner" class="hidden"><div id="banner-title"></div><div id="banner-sub"></div></div>
+
+    <div id="bottom">
+      <div id="hint" class="hidden"></div>
+      <div id="buildbar" class="hidden"></div>
+      <div id="spellbar"></div>
+    </div>
+    <canvas id="minimap" width="170" height="170"></canvas>
+  </div>
+
+  <!-- Class select -->
+  <div id="menu" class="screen">
+    <div class="menu-inner">
+      <h1>Nightfall Bastion</h1>
+      <div class="subtitle">Gather by day. Build your defenses. Survive the night.</div>
+      <div id="class-cards"></div>
+      <div id="best"></div>
+      <div id="controls-menu" class="controls"></div>
+    </div>
+  </div>
+
+  <!-- Talents -->
+  <div id="talents" class="screen hidden">
+    <div class="modal wide">
+      <div class="modal-head">
+        <h2>Talents</h2>
+        <div class="points">Points available: <b id="talent-points">0</b></div>
+        <button id="btn-talents-close" class="close" title="Close">✕</button>
+      </div>
+      <div id="talent-trees"></div>
+      <div class="modal-foot">Earn a point every level. Each row unlocks after spending <b>2</b> more points in that tree.</div>
+    </div>
+  </div>
+
+  <!-- Pause -->
+  <div id="pause" class="screen hidden">
+    <div class="modal">
+      <h2>Paused</h2>
+      <div id="controls-pause" class="controls"></div>
+      <div class="buttons">
+        <button id="btn-resume" class="primary">Resume</button>
+        <button id="btn-restart">Restart</button>
+        <button id="btn-menu">Main menu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game over -->
+  <div id="gameover" class="screen hidden">
+    <div class="modal">
+      <h2 class="danger-title">The Hearth has fallen</h2>
+      <div id="over-stats"></div>
+      <div id="over-best"></div>
+      <div class="buttons">
+        <button id="btn-again" class="primary">Play again</button>
+        <button id="btn-over-menu">Choose class</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/util.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/entities.js"></script>
+  <script src="js/spells.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
