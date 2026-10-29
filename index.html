@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nightfall Bastion</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1C9 5 13 6 13 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3-1-3 0-6 1-8z' fill='%23ff8a3a'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="game-root"></div>
+
+  <!-- In-game HUD -->
+  <div id="hud" class="hidden">
+    <div id="hud-player" class="panel">
+      <div class="row"><b id="hud-class"></b><span id="hud-level"></span></div>
+      <div class="bar hp"><div id="hp-fill"></div><span id="hp-text"></span></div>
+      <div class="bar xp"><div id="xp-fill"></div><span id="xp-text"></span></div>
+      <button id="talent-alert" class="hidden">
+        ★ <span id="talent-count">0</span> talent point(s) — press <kbd data-code="KeyT">T</kbd>
+      </button>
+    </div>
+    <div id="party" class="hidden"></div>
+
+    <div id="hud-top">
+      <div id="hud-cycle" class="panel">
+        <div id="cycle-label"></div>
+        <div class="cycle-track"><div id="cycle-fill"></div></div>
+        <div id="cycle-sub"></div>
+      </div>
+      <div id="hearth-panel" class="panel">
+        <span id="hearth-name">Hearth I</span>
+        <div class="bar hearth"><div id="hearth-fill"></div><span id="hearth-text"></span></div>
+        <button id="btn-hearth-up" title="Upgrade the Hearth"></button>
+      </div>
+    </div>
+    <div id="scout" class="panel hidden"></div>
+    <div id="ctx" class="hidden"></div>
+
+    <div id="hud-res" class="panel">
+      <div class="res" title="Wood"><span id="res-ico-wood"></span><span id="res-wood">0</span></div>
+      <div class="res" title="Stone"><span id="res-ico-stone"></span><span id="res-stone">0</span></div>
+      <div class="res" title="Gold"><span id="res-ico-gold"></span><span id="res-gold">0</span></div>
+      <button id="btn-open-talents" title="Talents">★ Talents</button>
+      <button id="btn-open-inventory" title="Bag (I)">🎒 Bag<span id="bag-new" class="hidden"></span></button>
+    </div>
+
+    <div id="death" class="hidden"></div>
+    <div id="toasts"></div>
+    <div id="banner" class="hidden"><div id="banner-title"></div><div id="banner-sub"></div></div>
+
+    <div id="bottom">
+      <div id="hint" class="hidden"></div>
+      <div id="buildbar" class="hidden"></div>
+      <div id="spellbar"></div>
+    </div>
+    <canvas id="minimap" width="170" height="170"></canvas>
+    <div id="net-status" class="hidden"></div>
+  </div>
+
+  <div id="loading" class="screen"><div class="loading-text">Loading…</div></div>
+
+  <!-- Class select -->
+  <div id="menu" class="screen hidden">
+    <div class="menu-inner">
+      <h1>Nightfall Bastion</h1>
+      <div class="subtitle">Gather by day. Build your defenses. Survive the night.</div>
+      <div id="assets-warning" class="hidden">
+        Character art not found. Run <code>npm run import-assets</code> to import your sprite packs. Placeholders are shown for now.
+      </div>
+      <div id="online-bar">
+        <input id="player-name" maxlength="16" placeholder="Your name" autocomplete="off">
+        <span>Pick a class to play solo, or</span>
+        <button id="btn-online">Play online (co-op, up to 4)</button>
+        <div id="online-error"></div>
+      </div>
+      <div id="class-cards"></div>
+      <div id="best"></div>
+      <button id="btn-board-menu" class="board-link">🏆 Leaderboards</button>
+      <div id="controls-menu" class="controls"></div>
+    </div>
+  </div>
+
+  <!-- Online room browser -->
+  <div id="hub" class="screen hidden">
+    <div class="modal wide hub-modal">
+      <div class="modal-head">
+        <h2>Play online</h2>
+        <div class="points" id="hub-status"></div>
+        <button id="btn-board-hub">🏆 Leaderboards</button>
+        <button id="btn-hub-back" class="close" title="Back">✕</button>
+      </div>
+      <div class="hub-actions">
+        <div class="hub-box">
+          <h3>Start a room</h3>
+          <p>Up to 4 players. Friends join with its code or an invite link.</p>
+          <div class="hub-buttons">
+            <button id="btn-create-public" class="primary">Public room</button>
+            <button id="btn-create-private">Private room</button>
+          </div>
+        </div>
+        <div class="hub-box">
+          <h3>Join with a code</h3>
+          <p>Ask the host for their 5-letter room code.</p>
+          <div class="hub-join">
+            <input id="join-code" maxlength="5" placeholder="ABCDE" autocomplete="off" spellcheck="false">
+            <button id="btn-join" class="primary">Join</button>
+          </div>
+        </div>
+      </div>
+      <h3 class="hub-list-title">Public rooms</h3>
+      <div id="room-list"></div>
+      <div id="hub-error"></div>
+    </div>
+  </div>
+
+  <!-- Co-op lobby -->
+  <div id="lobby" class="screen hidden">
+    <div class="modal wide lobby-modal">
+      <div class="modal-head">
+        <h2>Room <span id="lobby-code"></span></h2>
+        <div class="points" id="lobby-status"></div>
+        <button id="btn-copy-invite">Copy invite link</button>
+        <button id="btn-lobby-leave" class="close" title="Leave the room">✕</button>
+      </div>
+      <div id="lobby-members"></div>
+      <div class="lobby-label">Your class</div>
+      <div id="lobby-classes"></div>
+      <div class="buttons"><button id="btn-lobby-start" class="primary">Start</button></div>
+    </div>
+  </div>
+
+  <!-- Talents -->
+  <div id="talents" class="screen hidden">
+    <div class="modal talents-modal">
+      <div class="modal-head">
+        <h2>Talents</h2>
+        <div class="points">Points available: <b id="talent-points">0</b></div>
+        <button id="btn-talents-reset" class="reset">Reset all</button>
+        <button id="btn-talents-close" class="close" title="Close">✕</button>
+      </div>
+      <div id="talent-trees"></div>
+      <div class="modal-foot" id="talent-foot"></div>
+    </div>
+    <div id="talent-tip" class="hidden"></div>
+  </div>
+
+  <!-- Bag -->
+  <div id="inventory" class="screen hidden">
+    <div class="modal inventory-modal">
+      <div class="modal-head">
+        <h2>Bag</h2>
+        <div class="points" id="inv-count"></div>
+        <button id="btn-inventory-close" class="close" title="Close">✕</button>
+      </div>
+      <div class="inv-body">
+        <div>
+          <h3>Worn</h3>
+          <div id="inv-equip"></div>
+          <div id="inv-stats"></div>
+        </div>
+        <div>
+          <h3>Carried</h3>
+          <div id="inv-bag"></div>
+          <div class="inv-help">Walk over loot to pick it up. Click to wear, right-click to salvage for gold.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="item-tip" class="hidden"></div>
+
+  <!-- Merchant -->
+  <div id="shop" class="screen hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <h2>Merchant</h2>
+        <div class="points">Your gold: <b id="shop-gold">0</b></div>
+        <button id="btn-shop-close" class="close" title="Close">✕</button>
+      </div>
+      <div id="shop-items"></div>
+      <h3 id="shop-wares-title" class="hidden">Equipment</h3>
+      <div id="shop-wares"></div>
+      <div class="modal-foot">The merchant leaves at nightfall.</div>
+    </div>
+  </div>
+
+  <!-- Pause -->
+  <div id="pause" class="screen hidden">
+    <div class="modal">
+      <h2 id="pause-title">Paused</h2>
+      <div id="pause-note"></div>
+      <div id="controls-pause" class="controls"></div>
+      <div class="buttons">
+        <button id="btn-resume" class="primary">Resume</button>
+        <button id="btn-restart">Restart</button>
+        <button id="btn-menu">Main menu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- End of a run (or its victory) -->
+  <div id="gameover" class="screen hidden">
+    <div class="modal results">
+      <h2 id="over-title" class="danger-title">The Hearth has fallen</h2>
+      <div id="over-sub"></div>
+      <div id="over-stats"></div>
+      <div id="over-party"></div>
+      <div id="over-notes"></div>
+      <div class="buttons">
+        <button id="btn-endless" class="primary">Keep going (endless)</button>
+        <button id="btn-again" class="primary">Play again</button>
+        <button id="btn-victory-end">End run</button>
+        <button id="btn-over-menu">Choose class</button>
+        <button id="btn-over-board">🏆 Leaderboards</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaderboards -->
+  <div id="board" class="screen hidden">
+    <div class="modal wide board-modal">
+      <div class="modal-head">
+        <h2>Leaderboards</h2>
+        <div class="points" id="board-note"></div>
+        <button id="btn-board-close" class="close" title="Close">✕</button>
+      </div>
+      <div id="board-tabs"></div>
+      <div id="board-list"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
