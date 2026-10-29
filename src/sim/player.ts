@@ -148,6 +148,8 @@ export class Player {
 
   get maxHp(): number { return this.stats.maxHp; }
 
+  get provoke(): number | undefined { return this.def.provoke; }
+
   /** Items being worn. */
   get worn(): Item[] { return Object.values(this.equip).filter((i): i is Item => !!i); }
 

@@ -77,15 +77,17 @@ function cleave(g: Game, p: Player): void {
   const range = b.range! * s.rangeMul * (over ? 1.5 : 1), arc = b.arc! * s.arcMul;
   let dmg = b.dmg * (over ? 1.6 : 1);
   if (p.buffs.revenge) { dmg *= 1.5; delete p.buffs.revenge; }
-  let hit = false;
+  let hits = 0;
   for (const e of g.enemies) {
     if (e.dead || dist(p.x, p.y, e.x, e.y) > range + e.r) continue;
     if (Math.abs(angleDiff(p.angle, Math.atan2(e.y - p.y, e.x - p.x))) > arc / 2) continue;
-    hit = true;
+    hits++;
     dealPlayerDamage(g, p, e, dmg, { knock: over ? 260 : 160, fromX: p.x, fromY: p.y, tag: 'cleave' });
     if (f.has('bleed') && !e.dead) applyDot(e, 6 * p.bleedMul, 3, BLEED_COLOR);
   }
-  if (hit && f.has('rhythm')) p.cds.charge = Math.max(0, (p.cds.charge || 0) - 0.25 * s.ranks.rhythm);
+  // Melee sustain: a little health back for each monster struck (counted up to 4).
+  if (hits) p.heal(Math.min(hits, 4) * 1.5, true);
+  if (hits && f.has('rhythm')) p.cds.charge = Math.max(0, (p.cds.charge || 0) - 0.25 * s.ranks.rhythm);
   if (third && f.has('earthsplitter')) {
     // A long, narrow shockwave in front of the warrior.
     const len = 320 * s.rangeMul;

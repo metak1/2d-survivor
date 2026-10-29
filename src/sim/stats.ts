@@ -13,7 +13,7 @@ const BASE: Omit<Stats, 'flags' | 'ranks'> = {
 /** A class's stats with its learned talents and the items it's wearing. */
 export function computeStats(cls: ClassId, talents: Record<string, number>, items: Item[] = []): Stats {
   const def = CLASSES[cls];
-  const s: Stats = { ...BASE, maxHp: def.hp, regen: def.regen, flags: new Set(), ranks: {} };
+  const s: Stats = { ...BASE, maxHp: def.hp, regen: def.regen, armor: def.armor ?? 0, flags: new Set(), ranks: {} };
   for (const tree of TALENTS[cls]) {
     for (const node of tree.nodes) {
       for (const t of node.options) {

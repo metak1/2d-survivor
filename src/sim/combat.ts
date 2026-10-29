@@ -54,6 +54,8 @@ export interface Friendly {
   y: number;
   r: number;
   dead: boolean;
+  /** Building hunters within this range attack it instead (Warrior). */
+  provoke?: number;
   hurt(dmg: number, src?: Enemy): void;
 }
 

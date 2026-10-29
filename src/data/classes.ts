@@ -4,16 +4,17 @@ import type { ClassDef, ClassId } from './types';
 export const CLASSES: Record<ClassId, ClassDef> = {
   warrior: {
     name: 'Warrior', color: '#c94f4f', accent: '#f2c879', hp: 170, speed: 185, regen: 1,
+    armor: 0.15, provoke: 300,
     tagline: 'Unbreakable frontline brawler',
-    desc: 'Cleaves through the horde up close. High health and strong area control.',
+    desc: 'Cleaves through the horde up close. Heavy plate (15% less damage taken) and wall-breaking monsters near you turn to fight you instead.',
     light: 230,
     look: { sprite: 'knight', scale: 2.6 },
-    basic: { name: 'Cleave', icon: 1440, type: 'melee', dmg: 24, cd: 0.45, range: 74, arc: 1.9,
-      desc: 'Swing your sword in a wide arc. Also chops trees and mines rocks.' },
+    basic: { name: 'Cleave', icon: 1440, type: 'melee', dmg: 27, cd: 0.45, range: 74, arc: 1.9,
+      desc: 'Swing your sword in a wide arc, healing a little for each monster struck. Also chops trees and mines rocks.' },
     mobility: { id: 'roll', name: 'Roll', icon: 884, cd: 3,
       desc: 'Dodge-roll in your movement direction. Briefly invulnerable.' },
     spells: [
-      { id: 'charge', key: 'KeyQ', name: 'Charge', icon: 1342, cd: 7,
+      { id: 'charge', key: 'KeyQ', name: 'Charge', icon: 1342, cd: 6,
         desc: 'Dash toward the cursor, damaging and stunning enemies in your path.' },
       { id: 'whirlwind', key: 'KeyE', name: 'Whirlwind', icon: 1360, cd: 10,
         desc: 'Spin for 1.6s, repeatedly striking everything around you.' },

@@ -169,7 +169,10 @@ export class Enemy {
 
   private groundLogic(dt: number, foe: Friendly | null, fd: number): void {
     const g = this.g, d = this.def, w = g.world;
-    const aggro = d.buildingHunter ? 90 : d.boss ? 480 : 300;
+    // Building hunters ignore people unless they're in the way, or a Warrior provokes them
+    // (Lava Slimes still go for the walls: blowing up on a melee class would be brutal).
+    const provoke = d.buildingHunter && !d.sapper ? foe?.provoke ?? 0 : 0;
+    const aggro = d.buildingHunter ? Math.max(90, provoke) : d.boss ? 480 : 300;
     let spd = this.moveSpeed;
 
     let tx: number, ty: number, flowBld: Building | null = null;

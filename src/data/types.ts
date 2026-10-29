@@ -76,6 +76,10 @@ export interface ClassDef {
   hp: number;
   speed: number;
   regen: number;
+  /** Share of damage the class shrugs off before talents (frontline classes). */
+  armor?: number;
+  /** Monsters that hunt buildings fight this class instead when it comes this close. */
+  provoke?: number;
   tagline: string;
   desc: string;
   light: number;
