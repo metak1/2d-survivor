@@ -60,6 +60,25 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
 
 export const BOSS_ORDER: EnemyId[] = ['boss_warlord', 'boss_lich', 'boss'];
 
+/**
+ * Champions: after the final night, a growing share of the horde (CHAMPION_STEP more each night,
+ * up to CHAMPION_MAX) has one trait. Each rewards a different answer: burst, area damage, crowd
+ * control, range, slows and walls.
+ */
+export type ChampionTrait = 'shielded' | 'splitting' | 'vampiric' | 'explosive' | 'swift';
+export const CHAMPIONS: Record<ChampionTrait, { name: string; color: string; desc: string }> = {
+  shielded: { name: 'Shielded', color: '#8fd0ff', desc: 'a ward absorbs damage first' },
+  splitting: { name: 'Splitting', color: '#9be36b', desc: 'splits in two when slain' },
+  vampiric: { name: 'Vampiric', color: '#ff5a6a', desc: 'heals with every hit' },
+  explosive: { name: 'Explosive', color: '#ffb347', desc: 'explodes when slain' },
+  swift: { name: 'Swift', color: '#f3f0a0', desc: 'much faster' },
+};
+export const CHAMPION_TRAITS = Object.keys(CHAMPIONS) as ChampionTrait[];
+export const CHAMPION_STEP = 0.05;
+export const CHAMPION_MAX = 0.6;
+/** Champions give this many times the gold and XP. */
+export const CHAMPION_REWARD = 3;
+
 export const GUARD_TYPES: EnemyId[] = ['guard_minotaur', 'guard_orc', 'guard_bear'];
 
 export const NODES: Record<NodeId, NodeDef> = {

@@ -3,6 +3,7 @@
 
 import Phaser from 'phaser';
 import { ART_SCALE, BUILD_RANGE, TILE, WORLD_H, WORLD_W } from '../config';
+import { CHAMPIONS } from '../data/enemies';
 import { BUILDINGS } from '../data/buildings';
 import type { BuildSlot } from '../data/types';
 import type { Game } from '../sim/game';
@@ -74,6 +75,12 @@ export class Overlay {
         bar(e.x, top, big ? 60 : e.r * 2.2, big ? 6 : 4, e.hp / e.maxHp, e.def.boss ? 0xff7a2a : e.def.guard ? 0xd9a03a : 0xe04848);
       }
       if (e.shield > 0) { gr.lineStyle(2, 0xb58cff, 0.8).strokeCircle(e.x, e.y, e.r + 6); }
+      // Champions: a ring in their trait's colour, doubled while a ward holds.
+      if (e.champ) {
+        const col = Phaser.Display.Color.HexStringToColor(CHAMPIONS[e.champ].color).color;
+        gr.lineStyle(2.5, col, 0.9).strokeEllipse(e.x, e.y + e.r * 0.6, e.r * 2.6, e.r * 1.2);
+        if (e.ward > 0) gr.lineStyle(1.5, col, 0.7).strokeEllipse(e.x, e.y + e.r * 0.6, e.r * 3.2, e.r * 1.5);
+      }
       if (e.marked > 0) { gr.lineStyle(1.5, 0xff5a4a, 0.9).strokeCircle(e.x, top - 6, 4); gr.lineBetween(e.x - 6, top - 6, e.x + 6, top - 6); }
       if (e.stun > 0) {
         gr.fillStyle(0xffe27a, 1);

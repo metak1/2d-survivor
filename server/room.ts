@@ -13,6 +13,7 @@ import { NO_INTENT, type Intent } from '../src/sim/player';
 import { encodeSnapshot, NET_EVENTS, type NetEvent } from '../src/net/snapshot';
 import type { ClientMsg, LobbyMember, RoomInfo, ServerMsg } from '../src/net/protocol';
 import { leaderboard } from './leaderboard';
+import { nightProgress } from '../src/sim/cycle';
 
 /** Steps between snapshots (60 / 2 = 30 a second). */
 const SNAP_EVERY = 2;
@@ -259,7 +260,7 @@ export class Room {
     const players = [...this.roster.values()].slice(-MAX_PLAYERS);
     const res = leaderboard.submit({
       size: Math.max(1, Math.min(MAX_PLAYERS, g.peakParty)), players, nights: g.stats.nights, won: g.won,
-      kills: g.stats.kills, time: Math.round(g.time), online: true,
+      kills: g.stats.kills, time: Math.round(g.time), online: true, progress: nightProgress(g),
     }, this.entry?.id, this.entry?.key);
     this.entry = { id: res.id, key: res.key };
     for (const c of this.members) c.send?.({ t: 'ranked', size: g.peakParty, rank: res.rank, id: res.id });

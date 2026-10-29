@@ -1,9 +1,9 @@
 // Day/night cycle and wave spawning. Each night is planned at dusk so scouts can report
 // what's coming while there's still light to prepare.
 
-import { BOSS_EVERY, DARKNESS_MAX, DAY_LEN, FINAL_NIGHT, NIGHT_BASE_LEN, WORLD_H, WORLD_W } from '../config';
+import { BOSS_EVERY, DARKNESS_MAX, DAY_LEN, FINAL_NIGHT, HORDE_CAP, HORDE_CAP_PER_PLAYER, NIGHT_BASE_LEN, WORLD_H, WORLD_W } from '../config';
 import { dungeonsAtDawn, expelAll, warnInside } from './dungeons';
-import { BOSS_ORDER, ENEMIES } from '../data/enemies';
+import { BOSS_ORDER, CHAMPION_MAX, CHAMPION_STEP, CHAMPION_TRAITS, ENEMIES, type ChampionTrait } from '../data/enemies';
 import type { EnemyId } from '../data/types';
 import { choice, compass, rand, TAU } from '../core/math';
 import { Enemy } from './enemy';
@@ -11,7 +11,8 @@ import type { Game } from './game';
 import { onDawn, onNightfall } from './daylife';
 import { tileOf } from './world';
 
-export interface SpawnEntry { type: EnemyId; t: number; angle: number }
+/** `power`: strength from budget beyond the horde cap; `champ`: a champion's trait. */
+export interface SpawnEntry { type: EnemyId; t: number; angle: number; power?: number; champ?: ChampionTrait }
 
 export interface NightPlan {
   len: number;
@@ -41,7 +42,7 @@ export function updateCycle(g: Game, dt: number): void {
   }
   while (g.spawnQueue.length && g.spawnQueue[0].t <= g.phaseTime) {
     const s = g.spawnQueue.shift()!;
-    spawnEnemy(g, s.type, s.angle);
+    spawnEnemy(g, s);
   }
   if (g.phaseTime < g.phaseLen) return;
   // The final night only ends once its boss is dead.
@@ -76,8 +77,18 @@ export function planNight(g: Game): void {
     budget -= ENEMIES[type].cost;
     list.push(type);
   }
+  // Past the horde cap, fewer but stronger monsters (a random sample keeps the mix).
+  const cap = hordeCap(g), power = Math.max(1, list.length / cap);
+  if (list.length > cap) {
+    for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
+    list.length = cap;
+  }
+  const champShare = championShare(n);
   const window = len * 0.65;
-  const queue: SpawnEntry[] = list.map(type => ({ type, t: Math.pow(Math.random(), 1.2) * window, angle: choice(angles) }));
+  const queue: SpawnEntry[] = list.map(type => ({
+    type, t: Math.pow(Math.random(), 1.2) * window, angle: choice(angles), power,
+    champ: Math.random() < champShare ? choice(CHAMPION_TRAITS) : undefined,
+  }));
   const boss = bossFor(n);
   if (boss) queue.push({ type: boss, t: window * 0.35, angle: angles[0] });
   queue.sort((a, b) => a.t - b.t);
@@ -89,6 +100,8 @@ export function planNight(g: Game): void {
   g.events.emit('scout', {
     night: n,
     final: n === FINAL_NIGHT && !g.won,
+    power: Math.round(power * 100) / 100,
+    champions: queue.filter(s => s.champ).length,
     bloodMoon: blood,
     directions: [...new Set(angles.map(compass))].join(' and '),
     groups: [...counts].sort((a, b) => b[1] - a[1]).map(([t, c]) => ({ name: ENEMIES[t].name, count: c, blurb: ENEMIES[t].blurb ?? '' })),
@@ -149,14 +162,28 @@ function startDay(g: Game): void {
   });
 }
 
-function spawnEnemy(g: Game, type: EnemyId, angle: number): void {
+/** How far into the current night the run is (0 by day): the leaderboard's tie-break once the Hearth falls. */
+export const nightProgress = (g: Game) =>
+  g.phase === 'night' ? Math.floor(Math.min(0.99, g.phaseTime / g.phaseLen) * 100) / 100 : 0;
+
+/** Most monsters a night sends for the current party. */
+export const hordeCap = (g: Game) => HORDE_CAP + HORDE_CAP_PER_PLAYER * (Math.max(1, g.players.length) - 1);
+
+/** Share of night `n`'s monsters that are champions (none until after the final night). */
+export const championShare = (n: number) => Math.min(CHAMPION_MAX, CHAMPION_STEP * Math.max(0, n - FINAL_NIGHT));
+
+function spawnEnemy(g: Game, s: SpawnEntry): void {
+  const { type, angle } = s;
   // Just beyond the lit area around the base, so the action starts quickly.
   const cx = WORLD_W / 2, cy = WORLD_H / 2;
   for (let tries = 0; tries < 12; tries++) {
     const a = angle + rand(-0.3, 0.3), r = 1050 - rand(0, 160);
     const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
     if (!ENEMIES[type].flying && g.world.blocked(tileOf(x), tileOf(y))) continue;
-    g.enemies.push(new Enemy(g, type, x, y, g.day));
+    const e = new Enemy(g, type, x, y, g.day);
+    if (s.power && !e.def.boss) e.empower(s.power);
+    if (s.champ) e.makeChampion(s.champ);
+    g.enemies.push(e);
     if (ENEMIES[type].boss) g.fx.toast(`⚠ A ${ENEMIES[type].name} has appeared!`);
     return;
   }

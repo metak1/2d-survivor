@@ -1,5 +1,5 @@
 import { FULL_H, WORLD_W } from '../config';
-import { ENEMIES } from '../data/enemies';
+import { CHAMPION_REWARD, ENEMIES, type ChampionTrait } from '../data/enemies';
 import type { EnemyDef, EnemyId } from '../data/types';
 import { clamp, dist, rand, TAU } from '../core/math';
 import { damageEnemy, enemiesInRadius, enemyDmgMul, explode, nearestFriendly, type Friendly } from './combat';
@@ -42,6 +42,14 @@ export class Enemy {
   home: { x: number; y: number } | null = null;
   /** Id of the dungeon it lives in (0: the overworld). It ignores the sun and the Hearth. */
   dungeon = 0;
+  /** Champion trait, if it is one. */
+  champ: ChampionTrait | null = null;
+  /** A shielded champion's ward: absorbs damage before health. */
+  ward = 0;
+  /** Gold and XP multiplier (strength beyond the horde cap, champions). */
+  reward = 1;
+  /** Strength from budget beyond the horde cap (1: none). */
+  power = 1;
   /** Seconds until a boss's delayed blast (Flame Golem's slam, the Lich's frost nova) goes off. */
   slamT = 0;
   private slam = { r: 0, dmg: 0, bld: 0, color: '' };
@@ -131,6 +139,43 @@ export class Enemy {
     this.groundLogic(dt, foe, fd);
   }
 
+  /** A champion died: splitting ones break in two, explosive ones blow up. */
+  championDeath(): void {
+    const g = this.g;
+    if (this.champ === 'explosive') {
+      explode(g, this.x, this.y, 95, 45 * this.dmgMul, { team: 'enemy', color: '#ffb347' });
+      g.fx.shake(5);
+    } else if (this.champ === 'splitting') {
+      for (let i = 0; i < 2; i++) {
+        const a = rand(0, TAU), e = new Enemy(g, this.type, this.x + Math.cos(a) * 18, this.y + Math.sin(a) * 18, g.day);
+        e.maxHp = e.hp = Math.round(this.maxHp * 0.3);
+        e.dmgMul = this.dmgMul * 0.7;
+        e.reward = this.reward / 6;
+        e.dungeon = this.dungeon;
+        e.home = this.home;
+        g.enemies.push(e);
+      }
+      g.fx.particles(this.x, this.y, 14, '#9be36b', 140, 0.5, 4);
+    }
+  }
+
+  /** Night monsters past the horde cap: as strong as several, and worth as much. */
+  empower(power: number): void {
+    if (power <= 1) return;
+    this.power = power;
+    this.maxHp = this.hp = Math.round(this.maxHp * power);
+    this.dmgMul *= Math.sqrt(power);
+    this.reward *= power;
+  }
+
+  makeChampion(trait: ChampionTrait): void {
+    this.champ = trait;
+    this.maxHp = this.hp = Math.round(this.maxHp * 1.5);
+    this.reward *= CHAMPION_REWARD;
+    if (trait === 'shielded') this.ward = this.maxHp * 0.5;
+    if (trait === 'swift') this.speed *= 1.45;
+  }
+
   /** Forces it to chase a player for `t` seconds. */
   tauntBy(p: Player, t: number): void {
     this.taunt = Math.max(this.taunt, t);
@@ -170,6 +215,7 @@ export class Enemy {
     this.angle = Math.atan2(foe.y - this.y, foe.x - this.x);
     this.g.events.emit('anim', { id: this.id, anim: 'attack' });
     foe.hurt(this.def.dmg * this.dmgMul * enemyDmgMul(this.g, this), this);
+    if (this.champ === 'vampiric') this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.08);
   }
 
   private groundLogic(dt: number, foe: Friendly | null, fd: number): void {
@@ -238,6 +284,7 @@ export class Enemy {
       this.angle = Math.atan2(target.y - this.y, target.x - this.x);
       g.events.emit('anim', { id: this.id, anim: 'attack' });
       w.damage(target, d.dmg * this.dmgMul * (d.bldMul || 1) * enemyDmgMul(g, this));
+      if (this.champ === 'vampiric') this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.08);
       g.fx.particles(target.x, target.y, 3, '#c9a77a', 80, 0.3, 3);
     }
   }

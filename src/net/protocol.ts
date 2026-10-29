@@ -9,7 +9,7 @@ import type { Snapshot } from './snapshot';
 
 export const WS_PATH = '/ws';
 /** Bumped when messages change, so an old browser tab is told to refresh instead of misbehaving. */
-export const PROTOCOL = 6;
+export const PROTOCOL = 7;
 
 /** Someone in a room (ids are connection ids, not in-game player ids). */
 export interface LobbyMember { id: number; name: string; cls: ClassId; host: boolean; playing: boolean; online: boolean }
@@ -20,6 +20,8 @@ export interface RunResult {
   /** Seconds of play. */
   time: number;
   online: boolean;
+  /** How far into the night it fell on it got (0 to 0.99): ranks runs that survived as many nights. */
+  progress?: number;
 }
 export interface ScoreEntry extends RunResult { id: string; date: number }
 

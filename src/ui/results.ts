@@ -11,6 +11,7 @@ import { fetchBoards } from '../net/scores';
 import type { RunResult } from '../net/protocol';
 import type { Game } from '../sim/game';
 import { itemName } from '../sim/items';
+import { nightProgress } from '../sim/cycle';
 
 const $ = (id: string) => document.getElementById(id)!;
 const esc = (s: string) => s.replace(/[&<>"']/g, ch => `&#${ch.charCodeAt(0)};`);
@@ -32,6 +33,7 @@ export function runResult(g: Game): RunResult {
   return {
     size: Math.max(1, g.peakParty), players: g.players.map(p => ({ name: p.name, cls: p.cls })),
     nights: g.stats.nights, won: g.won, kills: g.stats.kills, time: Math.round(g.time), online: !!App.net,
+    progress: nightProgress(g),
   };
 }
 
@@ -125,7 +127,7 @@ export class BoardScreen {
       <tbody>${entries.map((e, i) => `<tr class="${e.id === this.mine ? 'me' : ''}">
         <td class="rk">${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</td>
         <td>${e.players.map(p => `<b>${esc(p.name)}</b> ${clsName(p.cls)}`).join(', ')}</td>
-        <td><b>${e.nights}</b>${e.won ? ' <span class="won" title="Won the run">👑</span>' : ''}</td>
+        <td><b>${e.nights}</b>${e.progress ? ` <span class="muted" title="How far into night ${e.nights + 1} it got">+${Math.round(e.progress * 100)}%</span>` : ''}${e.won ? ' <span class="won" title="Won the run">👑</span>' : ''}</td>
         <td>${short(e.kills)}</td><td>${clock(e.time)}</td>
         <td class="muted">${new Date(e.date).toLocaleDateString()}</td></tr>`).join('')}</tbody></table>`;
   }

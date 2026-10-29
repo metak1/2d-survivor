@@ -5,6 +5,7 @@ import { TALENTS, TALENT_GATES } from '../data/talents';
 import type { TalentDef, TalentNode, TalentTree } from '../data/types';
 import type { Game } from '../sim/game';
 import { command, me } from '../app';
+import { MAX_TALENT_POINTS } from '../config';
 import { canLearn, canUnlearn, nodeMax, nodeOpen, nodeRank, pointsAbove, rowRequirement, treeSpent } from '../sim/stats';
 import { iconHtml } from './icons';
 
@@ -39,6 +40,7 @@ export class TalentScreen {
     this.game = g;
     const p = me(), blocked = p.respecBlocked;
     $('talent-points').textContent = String(p.points);
+    $('talent-earned').textContent = `${p.earnedPoints} / ${MAX_TALENT_POINTS} earned this run`;
     const reset = $('btn-talents-reset') as HTMLButtonElement;
     reset.disabled = !!blocked;
     reset.title = blocked ?? 'Refund every talent point';

@@ -1,7 +1,7 @@
 // Daytime content: guarded treasure camps out in the wilds, visiting NPCs, supply drops,
 // Blood Moon omens, and the merchant's shop. Gives the player reasons to leave the base.
 
-import { MAP_H, MAP_W, TILE } from '../config';
+import { MAP_H, MAP_W, MAX_TALENT_POINTS, TILE } from '../config';
 import { CAMPS, DAY_EVENTS, DAY_EVENT_CHANCE, SHOP, type DayEvent, type NpcKind, type ShopEffect } from '../data/events';
 import { GUARD_TYPES } from '../data/enemies';
 import type { ResKey } from '../data/types';
@@ -203,10 +203,7 @@ function openChest(g: Game, p: Player, c: Camp): void {
   g.res.stone += stone;
   for (const q of g.players) q.gainXp(xp);
   let msg = `Treasure! +${gold} gold, +${wood} wood, +${stone} stone`;
-  if (Math.random() < 0.35) {
-    p.points++;
-    msg += ' and an ancient tome (+1 talent point)';
-  }
+  if (Math.random() < 0.35 && p.grantPoint()) msg += ' and an ancient tome (+1 talent point)';
   g.fx.toast(msg);
   chestDrop(g, c.x, c.y);
   g.fx.text(c.x, c.y - 30, `+${gold} 🪙`, '#ffe27a', 18, 1.4);
@@ -220,6 +217,7 @@ export function buy(g: Game, p: Player, id: ShopEffect): string | null {
   const item = SHOP.find(s => s.id === id)!;
   if (item.once && g.shopBought.has(id)) return 'Sold out';
   if (id === 'ally' && recruitCount(g, p) >= allySlots(p)) return 'No free companion slot';
+  if (id === 'talent' && !p.canGainPoint) return `You already have all ${MAX_TALENT_POINTS} talent points`;
   if (!g.canAfford(item.cost)) return 'Not enough gold';
   g.pay(item.cost);
   g.shopBought.add(id);
@@ -229,7 +227,7 @@ export function buy(g: Game, p: Player, id: ShopEffect): string | null {
     case 'repairAll': for (const b of g.world.buildings) b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.5); break;
     case 'wood': add('wood', 60); break;
     case 'stone': add('stone', 50); break;
-    case 'talent': p.points++; break;
+    case 'talent': p.grantPoint(); break;
     case 'ally': g.allies.push(new Ally(g, p, 'soldier', p.x - 30, p.y + 20)); break;
   }
   return null;

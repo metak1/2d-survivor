@@ -1,4 +1,5 @@
 import { CLASSES } from '../data/classes';
+import { MAX_TALENT_POINTS } from '../config';
 import { TALENTS } from '../data/talents';
 import type { ClassDef, ClassId, SpellDef, SpellId, Stats } from '../data/types';
 import type { AllyKind } from './ally';
@@ -211,17 +212,29 @@ export class Player {
 
   get xpNext(): number { return Math.floor(20 + this.level * 14 + this.level * this.level * 1.5); }
 
+  /** Talent points spent, and earned in all (spent plus unspent; at most MAX_TALENT_POINTS). */
+  get spentPoints(): number { return Object.values(this.talents).reduce((s, r) => s + r, 0); }
+  get earnedPoints(): number { return this.points + this.spentPoints; }
+  get canGainPoint(): boolean { return this.earnedPoints < MAX_TALENT_POINTS; }
+
+  /** Gives a talent point unless the run's limit is reached. */
+  grantPoint(): boolean {
+    if (!this.canGainPoint) return false;
+    this.points++;
+    return true;
+  }
+
   gainXp(n: number): void {
     this.xp += n;
     while (this.xp >= this.xpNext) {
       this.xp -= this.xpNext;
       this.level++;
-      this.points++;
+      const point = this.grantPoint();
       this.hp = Math.min(this.stats.maxHp, this.hp + this.stats.maxHp * 0.25);
       this.g.fx.text(this.x, this.y - 30, 'LEVEL UP!', '#ffe27a', 20, 1.6);
       this.g.fx.particles(this.x, this.y, 30, '#ffe27a', 200, 0.8, 3);
       this.g.events.emit('vfx', { kind: 'ring', x: this.x, y: this.y, r: 90, color: '#ffe27a', life: 0.5 });
-      this.g.events.emit('levelUp', { level: this.level, to: this.id });
+      this.g.events.emit('levelUp', { level: this.level, to: this.id, point });
     }
   }
 

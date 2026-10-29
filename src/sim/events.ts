@@ -13,6 +13,9 @@ export interface ScoutReport {
   night: number;
   /** The night that decides the run. */
   final: boolean;
+  /** Strength of each monster from budget beyond the horde cap (1: none), and how many are champions. */
+  power: number;
+  champions: number;
   directions: string;
   bloodMoon: boolean;
   groups: { name: string; count: number; blurb: string }[];
@@ -30,7 +33,8 @@ export interface GameEvents {
   anim: { id: number; anim: 'attack' | 'attack2' };
   /** An enemy or the player died (renderer plays the death animation). */
   died: { id: number };
-  levelUp: { level: number; to: number };
+  /** `point`: whether it gave a talent point (not once the run's limit is reached). */
+  levelUp: { level: number; to: number; point: boolean };
   /** Dusk: the coming night's composition is known. */
   scout: ScoutReport;
   /** A player asked the merchant to trade. */

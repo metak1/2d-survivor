@@ -89,6 +89,14 @@ export function damageEnemy(g: Game, e: Enemy, amount: number, o: HitOpts = {}):
   if (e.freeze > 0 && (o.by ?? withFlag(g, 'shatter'))?.stats.flags.has('shatter')) amount *= 1.5;
   if (e.marked > 0) amount *= 1.25;
   if (e.shield > 0) amount *= 0.5;
+  // A shielded champion's ward soaks damage first.
+  if (e.ward > 0) {
+    const soak = Math.min(e.ward, amount);
+    e.ward -= soak;
+    amount -= soak;
+    if (!o.silent && soak > 0) g.fx.text(e.x, e.y - e.r - 8, String(Math.round(soak)), '#8fd0ff', 11);
+    if (amount <= 0) { e.lastHit = g.time; return 0; }
+  }
   const dealt = Math.min(e.hp, amount);
   e.hp -= amount;
   if (o.by) o.by.run.dmg += dealt;
@@ -206,6 +214,7 @@ function killEnemy(g: Game, e: Enemy, o: HitOpts): void {
   g.fx.particles(e.x, e.y, e.def.boss ? 60 : 12, e.def.color, e.def.boss ? 300 : 150, 0.7, e.def.boss ? 6 : 4);
   if (o.noReward) return;
 
+  if (e.champ) e.championDeath();
   onKill(g, e, o);
 
   // A Blood Moon doubles what the night's monsters drop.
@@ -213,9 +222,9 @@ function killEnemy(g: Game, e: Enemy, o: HitOpts): void {
   const goldMul = Math.max(1, ...g.players.map(p => p.stats.goldMul));
   g.stats.kills++;
   if (o.by) o.by.run.kills++;
-  g.res.gold += Math.round(e.def.gold * mul * goldMul);
+  g.res.gold += Math.round(e.def.gold * mul * goldMul * e.reward);
   // Everyone in the party levels together. Bigger parties face more monsters, each worth less.
-  for (const p of g.players) p.gainXp((e.def.xp * mul) / g.partyMul);
+  for (const p of g.players) p.gainXp((e.def.xp * mul * e.reward) / g.partyMul);
   monsterDrop(g, e);
   if (e.def.boss && e.dungeon) dungeonBossKilled(g, e);
   else if (e.def.boss) {

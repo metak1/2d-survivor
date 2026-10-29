@@ -25,7 +25,7 @@ interface Stored extends ScoreEntry {
 
 /** Best first: more nights, then a win, then further into the last night, then more kills, then faster. */
 const better = (a: ScoreEntry, b: ScoreEntry) =>
-  b.nights - a.nights || Number(b.won) - Number(a.won) || b.kills - a.kills || a.time - b.time;
+  b.nights - a.nights || Number(b.won) - Number(a.won) || (b.progress ?? 0) - (a.progress ?? 0) || b.kills - a.kills || a.time - b.time;
 
 export class Leaderboard {
   private entries: Stored[] = [];
@@ -114,7 +114,8 @@ export function parseRun(raw: unknown, soloOnly: boolean): RunResult | null {
     if (!p || typeof p.name !== 'string' || !CLASS_IDS.includes(p.cls as ClassId)) return null;
     players.push({ name: p.name.trim().slice(0, 16) || 'Player', cls: p.cls as ClassId });
   }
-  return { size, players, nights, won: !!r.won, kills, time, online: false };
+  const progress = typeof r.progress === 'number' && r.progress >= 0 && r.progress < 1 ? Math.floor(r.progress * 100) / 100 : 0;
+  return { size, players, nights, won: !!r.won, kills, time, online: false, progress };
 }
 
 // ----------------------------------------------------------------- HTTP

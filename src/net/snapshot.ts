@@ -21,6 +21,7 @@ import type { Camp, Npc, Pickup } from '../sim/daylife';
 import type { Interpolator } from './interp';
 import type { Item, Loot } from '../sim/items';
 import type { ItemSlot } from '../data/items';
+import type { ChampionTrait } from '../data/enemies';
 
 export type EventName = keyof GameEvents;
 export type NetEvent = [EventName, unknown];
@@ -48,6 +49,7 @@ interface PlayerSnap {
 interface EnemySnap {
   id: number; type: EnemyId; x: number; y: number; hp: number; maxHp: number; angle: number; moving: boolean;
   freeze: number; stun: number; root: number; shield: number; marked: number; lastHit: number;
+  champ?: ChampionTrait; ward?: number;
 }
 interface AllySnap {
   id: number; owner: number; kind: AllyKind; x: number; y: number; hp: number; maxHp: number; dead: boolean;
@@ -109,6 +111,7 @@ export function encodeSnapshot(g: Game, knownVersion: number, since: number, eve
     enemies: g.enemies.filter(e => !e.dead).map(e => ({
       id: e.id, type: e.type, x: r1(e.x), y: r1(e.y), hp: Math.ceil(e.hp), maxHp: e.maxHp, angle: r2(e.angle), moving: e.moving,
       freeze: r2(e.freeze), stun: r2(e.stun), root: r2(e.root), shield: r2(e.shield), marked: r2(e.marked), lastHit: e.lastHit,
+      champ: e.champ ?? undefined, ward: e.ward > 0 ? Math.ceil(e.ward) : undefined,
     })),
     allies: g.allies.map(a => ({
       id: a.id, owner: a.owner.id, kind: a.kind, x: r1(a.x), y: r1(a.y), hp: Math.ceil(a.hp), maxHp: a.maxHp, dead: a.dead,
@@ -229,7 +232,7 @@ export function applySnapshot(g: Game, s: Snapshot, interp: Interpolator, selfId
     }
     Object.assign(e, {
       hp: es.hp, maxHp: es.maxHp, angle: es.angle, moving: es.moving, freeze: es.freeze, stun: es.stun, root: es.root,
-      shield: es.shield, marked: es.marked, lastHit: es.lastHit,
+      shield: es.shield, marked: es.marked, lastHit: es.lastHit, champ: es.champ ?? null, ward: es.ward ?? 0,
     });
     aim(es.id, es.x, es.y, e, fresh);
     enemies.push(e);

@@ -28,3 +28,8 @@ export const MAX_PLAYERS = 4;           // co-op party size
 export const FINAL_NIGHT = 15;          // surviving this night and slaying its boss wins the run
 export const BOSS_EVERY = 5;            // a boss comes every this many nights
 export const PARTY_SCALE = 0.6;         // nights get this much bigger per extra player
+// Most monsters a night sends (solo, plus per extra player). Budget beyond it makes them stronger
+// instead of more numerous, so late endless nights stay playable and fair online.
+export const HORDE_CAP = 240;
+export const HORDE_CAP_PER_PLAYER = 70;
+export const MAX_TALENT_POINTS = 40;    // talent points a player can earn in a run (levels, tomes, the shop)

@@ -136,9 +136,9 @@ export function dropLoot(g: Game, x: number, y: number, item: Item): void {
 export function monsterDrop(g: Game, e: Enemy): void {
   const d = e.def;
   if (d.boss && e.dungeon) return;
-  const chance = d.boss ? 1 : d.guard ? 0.45 : Math.min(0.35, 0.035 * Math.max(1, d.cost));
+  const chance = d.boss ? 1 : d.guard || e.champ ? 0.45 : Math.min(0.35, 0.035 * Math.max(1, d.cost) * e.power);
   if (Math.random() > chance) return;
-  const luck = (g.bloodMoon ? 0.6 : 0) + (d.boss ? 1.5 : d.guard ? 0.5 : 0) + 0.03 * g.day;
+  const luck = (g.bloodMoon ? 0.6 : 0) + (d.boss ? 1.5 : d.guard || e.champ ? 0.5 : 0) + 0.03 * g.day;
   if (d.boss) {
     dropLoot(g, e.x, e.y, makeItem(g, g.day, rollRarity(luck, 'epic')));
     return;

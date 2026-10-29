@@ -27,6 +27,7 @@ import { heirloomFor, nextHeirloom, recordRun } from '../profile';
 import { submitSolo, type Submitted } from '../net/scores';
 import type { Rarity } from '../data/items';
 import { FINAL_NIGHT } from '../config';
+import { nightProgress } from '../sim/cycle';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -255,7 +256,10 @@ class UIController {
     const mine = (to?: number) => to === undefined || to === App.me;
     g.events.on('toast', m => { if (mine(m.to)) this.toast(m.msg); });
     g.events.on('banner', b => this.banner(b.title, b.sub, b.danger));
-    g.events.on('levelUp', e => { if (mine(e.to)) this.toast(`Level ${e.level}! Talent point available — press ${Input.label('KeyT')}`); });
+    g.events.on('levelUp', e => {
+      if (!mine(e.to)) return;
+      this.toast(e.point ? `Level ${e.level}! Talent point available — press ${Input.label('KeyT')}` : `Level ${e.level}!`);
+    });
     g.events.on('worldChanged', () => { this.minimap.dirty = true; });
     g.events.on('scout', r => { this.scout = r; this.renderScout(); });
     g.events.on('gameOver', () => { App.mode = 'over'; this.gameOver(g); });
@@ -459,6 +463,8 @@ class UIController {
     $('scout').innerHTML = `
       <div class="scout-head">${r.final ? '👑 Final night — ' : ''}${r.bloodMoon ? '🩸 Blood Moon — ' : ''}Scouts: night ${r.night}</div>
       <div class="scout-dir">From the ${r.directions}</div>
+      ${r.power > 1 ? `<div class="scout-row"><b>×${r.power}</b> stronger monsters <span>(the horde is too big to come all at once)</span></div>` : ''}
+      ${r.champions ? `<div class="scout-row"><b>${r.champions}</b> champions <span>shielded, splitting, vampiric, explosive or swift</span></div>` : ''}
       ${r.groups.map(gr => `<div class="scout-row"><b>${gr.count}×</b> ${gr.name} <span>${gr.blurb}</span></div>`).join('')}`;
   }
 
@@ -542,7 +548,9 @@ class UIController {
     const sub = this.endedByChoice ? `You held the Hearth through the final night.`
       : g.won ? `After winning, you held on for ${n - FINAL_NIGHT} more night${n - FINAL_NIGHT === 1 ? '' : 's'} of endless mode.`
       : n ? `You survived ${n} of ${FINAL_NIGHT} nights.` : '';
-    this.showResults(g, title, sub, !this.endedByChoice, isBest ? '★ New personal best!' : '');
+    const prog = this.endedByChoice ? 0 : nightProgress(g);
+    const deeper = prog ? ` The horde broke through ${Math.round(prog * 100)}% of the way into night ${n + 1}.` : '';
+    this.showResults(g, title, sub + deeper, !this.endedByChoice, isBest ? '★ New personal best!' : '');
     $('hud').classList.add('hidden');
   }
 
