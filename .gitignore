@@ -1,0 +1,12 @@
+node_modules/
+dist/
+dist-server/
+
+# Art extracted from purchased packs by `npm run import-assets`.
+# Not redistributable, so regenerate it locally instead of committing it.
+public/assets/sprites/
+public/assets/icons/
+
+# Leaderboards written by the game server (see server/leaderboard.ts).
+/data/
+*.log

@@ -1,0 +1,28 @@
+{
+  "name": "nightfall-bastion",
+  "version": "2.0.0",
+  "description": "2D top-down survival game: gather by day, build defenses, survive the night.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build && vite build --ssr server/main.ts --outDir dist-server",
+    "start": "node dist-server/main.js",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "import-assets": "node scripts/import-assets.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "phaser": "^3.90.0",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.2",
+    "adm-zip": "^0.5.18",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.7"
+  }
+}
