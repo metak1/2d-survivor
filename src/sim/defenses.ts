@@ -11,7 +11,6 @@ import { distToBuilding, type Building } from './world';
 
 export function updateDefenses(g: Game, dt: number): void {
   const team = g.team, w = g.world;
-  const garrison = team.flags.has('garrison') && g.phase === 'night';
   // Field Repairs works around each player who has it.
   const repairers = g.players.filter(p => !p.dead && (p.stats.flags.has('fieldrepair') || p.stats.flags.has('mender')));
 
@@ -24,7 +23,6 @@ export function updateDefenses(g: Game, dt: number): void {
       const mender = p.stats.flags.has('mender');
       if (b.hp < b.maxHp && distToBuilding(p, b) < (mender ? 260 : 100)) b.hp = Math.min(b.maxHp, b.hp + (mender ? 24 : 12) * dt);
     }
-    if (garrison && b.type !== 'hearth') b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.01 * dt);
 
     if (st.tower) {
       b.timer -= dt * team.towerSpeed;
@@ -123,9 +121,7 @@ function updateHearth(g: Game, h: Building, dt: number): void {
   const keeper = g.team.flags.has('hearthkeeper');
   const mend = g.phase === 'day' ? (keeper ? 16 : 8) : keeper ? 8 : 0;
   h.hp = Math.min(h.maxHp, h.hp + mend * dt);
-  // Citadel doubles the burn and lights it from level I.
-  const citadel = g.team.flags.has('citadel');
-  const burn = citadel ? Math.max(8, HEARTH_LEVELS[h.tier].burn) * 2 : HEARTH_LEVELS[h.tier].burn;
+  const burn = HEARTH_LEVELS[h.tier].burn;
   if (!burn) return;
   h.timer -= dt;
   if (h.timer > 0) return;

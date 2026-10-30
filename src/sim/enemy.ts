@@ -31,6 +31,8 @@ export class Enemy {
   shield = 0;
   /** Seconds of +25% damage taken (Hunter's Mark). */
   marked = 0;
+  /** Seconds of dealing 30% less damage (Intimidating Shout). */
+  cowed = 0;
   /** Seconds it must chase `taunter` (Challenging Roar, Bastion). */
   taunt = 0;
   taunter: Player | null = null;
@@ -118,6 +120,7 @@ export class Enemy {
     this.shield = Math.max(0, this.shield - dt);
     this.marked = Math.max(0, this.marked - dt);
     this.taunt = Math.max(0, this.taunt - dt);
+    this.cowed = Math.max(0, this.cowed - dt);
     if (this.freeze > 0 || this.stun > 0) {
       if (!d.flying) g.world.collide(this, false);
       return;

@@ -5,6 +5,7 @@ import { dist } from '../core/math';
 import type { Enemy } from './enemy';
 import type { Game } from './game';
 import type { Player } from './player';
+import type { Zone } from './zones';
 import { hasCompanions } from './ally';
 import { healFriend, mostWounded } from './heal';
 import { dungeonBossKilled } from './dungeons';
@@ -39,9 +40,10 @@ export interface HitOpts {
   fromY?: number;
 }
 
-/** Damage multiplier for a monster's attacks (Sanctuary: weaker inside Consecration). */
+/** Damage multiplier for a monster's attacks (Sanctuary: weaker inside Consecration; Intimidating Shout). */
 export function enemyDmgMul(g: Game, e: Enemy): number {
-  return g.zones.some(z => z.kind === 'field' && z.sanct && dist(z.x, z.y, e.x, e.y) < z.r) ? 0.7 : 1;
+  const sanct = g.zones.some(z => z.kind === 'field' && z.sanct && dist(z.x, z.y, e.x, e.y) < z.r);
+  return (sanct ? 0.7 : 1) * (e.cowed > 0 ? 0.7 : 1);
 }
 
 /** The first player with a talent, for effects that don't know who caused them (burns, poison). */
@@ -50,6 +52,11 @@ export const withFlag = (g: Game, flag: string): Player | undefined => g.players
 /** Whether a point is inside a War Banner's radius. */
 export function inBanner(g: Game, x: number, y: number): boolean {
   return g.zones.some(z => z.kind === 'banner' && dist(z.x, z.y, x, y) < z.r);
+}
+
+/** A player's own War Banner, if one is planted. */
+export function bannerOf(g: Game, p: Player): Extract<Zone, { kind: 'banner' }> | null {
+  return g.zones.find((z): z is Extract<Zone, { kind: 'banner' }> => z.kind === 'banner' && z.owner === p.id) ?? null;
 }
 
 /** Something monsters fight: the player or an allied companion. */

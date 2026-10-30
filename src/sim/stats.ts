@@ -38,7 +38,7 @@ export function computeStats(cls: ClassId, talents: Record<string, number>, item
       s.ranks[item.flag] = (s.ranks[item.flag] || 0) + 1;
     }
   }
-  if (s.flags.has('sentry') || s.flags.has('garrison')) s.towerSpeed += 0.3;
+  if (s.flags.has('sentry')) s.towerSpeed += 0.3;
   s.cdr = Math.min(0.6, s.cdr);
   s.armor = Math.min(0.6, s.armor);
   return s;

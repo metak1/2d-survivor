@@ -9,7 +9,7 @@ import type { Item } from './items';
 export interface RunRecord { dmg: number; heal: number; taken: number; kills: number; deaths: number; best: Item | null }
 import { angleDiff, dist } from '../core/math';
 import { canLearn, canUnlearn, computeStats, legendBonus } from './stats';
-import { applyDot, BLEED_COLOR, BURN_COLOR, burnMul, damageEnemy, dealPlayerDamage, enemiesInRadius, explode } from './combat';
+import { applyDot, BLEED_COLOR, BURN_COLOR, burnMul, damageEnemy, dealPlayerDamage, enemiesInRadius, explode, inBanner } from './combat';
 import { basicAttack, castSpell, channelBeam, channelMend, fireAimedShot, fireArrowFan } from './spells';
 import { guardianSpirit, hasCompanions, syncSummons } from './ally';
 import type { Enemy } from './enemy';
@@ -269,6 +269,11 @@ export class Player {
     if (f.has('laststand') && this.hp < s.maxHp * 0.3) dmg *= 0.6;
     if (f.has('survivalist') && this.hp < s.maxHp * 0.5) dmg *= 0.85;
     if (f.has('bastion') && this.stillT >= 1) dmg *= 0.7;
+    if (f.has('valor') && inBanner(g, this.x, this.y)) dmg *= 0.8;
+    if (f.has('sworn')) {
+      const near = g.allies.filter(a => a.owner === this && !a.dead && a.kind !== 'decoy' && dist(a.x, a.y, this.x, this.y) < 200).length;
+      dmg *= 1 - 0.08 * Math.min(3, near);
+    }
     const absorbed = Math.min(this.barrier, dmg);
     this.barrier -= absorbed;
     dmg -= absorbed;

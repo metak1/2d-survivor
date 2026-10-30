@@ -296,7 +296,23 @@ const SPELLS: Record<SpellId, SpellFn> = {
       if (f.has('cryheal')) a.heal(a.maxHp * heal);
       if (f.has('sharedcry')) { a.cry = p.buffs.cry; a.heal(a.maxHp * 0.3); }
     }
-    if (f.has('banner')) g.zones.push({ id: g.nextId(), owner: p.id, kind: 'banner', x: p.x, y: p.y, t: 0, r: 260, life: 10 });
+    if (f.has('banner')) {
+      // Hold the Line keeps one banner planted until the next Battle Cry moves it.
+      const hold = f.has('holdline'), std = s.ranks.bigbanner || 0;
+      if (hold) g.zones = g.zones.filter(z => !(z.kind === 'banner' && z.owner === p.id));
+      g.zones.push({ id: g.nextId(), owner: p.id, kind: 'banner', x: p.x, y: p.y, t: 0, r: 260 * (1 + 0.15 * std), life: hold ? 1e9 : 10 + 5 * std });
+    }
+    if (f.has('intimidate')) {
+      for (const e of enemiesInRadius(g, p.x, p.y, 300)) e.cowed = Math.max(e.cowed, 6);
+      g.events.emit('vfx', { kind: 'ring', x: p.x, y: p.y, r: 300, color: '#b0a0ff', life: 0.6 });
+    }
+    if (f.has('levy')) {
+      for (let i = 0; i < 3; i++) {
+        const a = new Ally(g, p, 'levy', p.x + (i - 1) * 32, p.y + 26);
+        g.allies.push(a);
+        g.fx.particles(a.x, a.y, 10, '#f2c879', 110, 0.5, 3);
+      }
+    }
     if (f.has('rally')) {
       for (const b of g.world.buildings) {
         if (b.hp < b.maxHp && distToBuilding(p, b) < 260) {

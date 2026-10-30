@@ -6,12 +6,12 @@
 import type { SpriteRef } from '../data/types';
 import { NPC_LOOKS } from '../data/events';
 import { dist } from '../core/math';
-import { applyDot, damageEnemy, explode, inBanner, POISON_COLOR, type Friendly } from './combat';
+import { applyDot, bannerOf, damageEnemy, explode, inBanner, POISON_COLOR, type Friendly } from './combat';
 import type { Enemy } from './enemy';
 import type { Game } from './game';
 import type { Player } from './player';
 
-export type AllyKind = 'soldier' | 'squire' | 'familiar' | 'hound' | 'spectral' | 'decoy';
+export type AllyKind = 'soldier' | 'squire' | 'familiar' | 'hound' | 'spectral' | 'levy' | 'decoy';
 
 interface AllyDef {
   name: string;
@@ -39,6 +39,8 @@ export const ALLY_DEFS: Record<Exclude<AllyKind, 'decoy'>, AllyDef> = {
   hound: { name: 'Hellhound', look: { sprite: 'hellhound', scale: 2.4 }, hp: 120, hpPerDay: 16, dmg: 10, dmgPerDay: 2, speed: 240, atkCd: 0.7, summon: true },
   spectral: { name: 'Spectral Hound', look: { sprite: 'hellhound', scale: 2.1 }, hp: 70, hpPerDay: 10, dmg: 8, dmgPerDay: 1.5, speed: 250, atkCd: 0.7,
     summon: true, life: 10 },
+  levy: { name: 'Man-at-arms', look: NPC_LOOKS.ally, hp: 110, hpPerDay: 16, dmg: 10, dmgPerDay: 2, speed: 190, atkCd: 0.9,
+    summon: true, life: 15 },
 };
 
 /** Base companion slots for recruits; talents add more. */
@@ -90,6 +92,8 @@ export class Ally implements Friendly {
   get def(): AllyDef | null { return this.kind === 'decoy' ? null : ALLY_DEFS[this.kind]; }
   get summon(): boolean { return this.kind === 'decoy' || !!this.def!.summon; }
   get flying(): boolean { return !!this.def?.flying; }
+  /** Summoned for a few seconds (and never mourned or brought back). */
+  get fleeting(): boolean { return this.kind === 'spectral' || this.kind === 'levy'; }
 
   /** Re-applies the owner's companion talents to health. */
   refresh(): void {
@@ -120,7 +124,7 @@ export class Ally implements Friendly {
     if (this.hotT > 0) { this.hotT -= dt; regen += this.hot; }
     if (s.flags.has('innerlight') && dist(this.x, this.y, p.x, p.y) < 200) regen += this.maxHp * 0.01;
     this.hp = Math.min(this.maxHp, this.hp + regen * dt);
-    if (s.flags.has('inspire') && dist(this.x, this.y, p.x, p.y) < 300) {
+    if (s.flags.has('inspire') && (dist(this.x, this.y, p.x, p.y) < 300 || inBanner(g, this.x, this.y))) {
       this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.02 * s.ranks.inspire * dt);
     }
 
@@ -128,15 +132,18 @@ export class Ally implements Friendly {
     if (this.kind === 'decoy') return;
 
     const d = this.def!;
-    // Fight monsters near us that are also near our player; otherwise keep close to them.
+    // Hold the Line: squires guard their owner's War Banner instead of following them.
+    const post = this.kind === 'squire' && s.flags.has('holdline') ? bannerOf(g, p) : null;
+    const lead = post ?? p;
+    // Fight monsters near us that are also near our player (or post); otherwise keep close to them.
     let target: Enemy | null = null, best = d.range ? d.range + 40 : 230;
     for (const e of g.enemies) {
-      if (e.dead || (e.def.flying && !d.range && dist(e.x, e.y, p.x, p.y) > 200)) continue;
+      if (e.dead || (e.def.flying && !d.range && dist(e.x, e.y, lead.x, lead.y) > 200)) continue;
       const dd = dist(this.x, this.y, e.x, e.y);
-      if (dd < best && dist(e.x, e.y, p.x, p.y) < 420) { best = dd; target = e; }
+      if (dd < best && dist(e.x, e.y, lead.x, lead.y) < (post ? post.r + 60 : 420)) { best = dd; target = e; }
     }
 
-    if (dist(this.x, this.y, p.x, p.y) > 650 && !p.dead) {
+    if (!post && dist(this.x, this.y, p.x, p.y) > 650 && !p.dead) {
       // Too far behind: catch up.
       this.x = p.x - 40;
       this.y = p.y + 20;
@@ -144,6 +151,7 @@ export class Ally implements Friendly {
 
     let tx: number, ty: number, stop: number;
     if (target) { tx = target.x; ty = target.y; stop = d.range ? d.range * 0.8 : this.r + target.r + 6; }
+    else if (post) { const a = this.id * 2.4; tx = post.x + Math.cos(a) * 40; ty = post.y + Math.sin(a) * 40; stop = 12; }
     else { tx = p.x - Math.cos(p.angle) * 45; ty = p.y - Math.sin(p.angle) * 45; stop = 18; }
     const dx = tx - this.x, dy = ty - this.y, dl = Math.hypot(dx, dy);
     if (dl > stop) {
@@ -180,6 +188,7 @@ export class Ally implements Friendly {
     if (f.has('bulwark') && near < 200) dmg *= 1 - 0.15 * p.stats.ranks.bulwark;
     if (f.has('devotion') && near < 250) dmg *= 1 - 0.06 * p.stats.ranks.devotion;
     if (f.has('hostheaven') && near < 300) dmg *= 0.8;
+    if (f.has('valor') && inBanner(g, this.x, this.y)) dmg *= 0.8;
     // Martyrdom: the Cleric takes part of the blow.
     if (f.has('martyr') && !p.dead && this.kind !== 'decoy') {
       p.hurt(dmg * 0.3);
@@ -192,11 +201,11 @@ export class Ally implements Friendly {
     this.lastHit = g.time;
     g.fx.text(this.x, this.y - 22, String(Math.round(dmg)), '#ff9a9a', 12);
     if (this.hp > 0) return;
-    if (this.kind !== 'decoy' && this.kind !== 'spectral' && guardianSpirit(g, p, this)) return;
+    if (this.kind !== 'decoy' && !this.fleeting && guardianSpirit(g, p, this)) return;
     this.dead = true;
     g.events.emit('died', { id: this.id });
     if (this.kind === 'decoy') return this.explodeDecoy();
-    if (this.kind === 'spectral') return;
+    if (this.fleeting) return;
     if (p.stats.flags.has('kingshost')) {
       this.respawn = 20;
       g.fx.toast(`Your ${this.def!.name.toLowerCase()} has fallen. It will return to the Hearth.`, p.id);
@@ -249,7 +258,7 @@ export const allySlots = (p: Player) => BASE_ALLY_SLOTS + p.stats.allyMax;
 
 /** A player's companions that count for Lone Wolf (decoys and temporary hounds don't). */
 export const hasCompanions = (g: Game, p: Player) =>
-  g.allies.some(a => a.owner === p && !a.dead && a.kind !== 'decoy' && a.kind !== 'spectral');
+  g.allies.some(a => a.owner === p && !a.dead && a.kind !== 'decoy' && !a.fleeting);
 
 /** How many of each persistent summon a player's talents grant. */
 function wantedSummons(p: Player): Partial<Record<AllyKind, number>> {
