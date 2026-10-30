@@ -80,6 +80,8 @@ export class Player {
   /** What we're wearing, and what we're carrying (up to BAG_SIZE). */
   equip: Partial<Record<ItemSlot, Item>> = {};
   bag: Item[] = [];
+  /** Online: the account playing this character (it gets it back when it returns to a saved run). */
+  account?: string;
   /** Legendaries discovered this run (craftable at the forge), and Legendary Shards to spend there. */
   codex = new Set<string>();
   shards = 0;

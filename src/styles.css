@@ -451,3 +451,33 @@ h1 { font-family: var(--title); font-size: clamp(36px, 7vw, 68px); margin: 0; co
 .fl-card button:hover:not(:disabled), .fg-row button:hover:not(:disabled) { background: rgba(255,154,58,.25); }
 .fl-card button:disabled, .fg-row button:disabled { opacity: .4; cursor: not-allowed; }
 @media (max-width: 860px) { .forge-body { grid-template-columns: 1fr; } }
+
+/* ------------------------------ Saved runs ------------------------------ */
+#saves, #lobby-saves { max-width: 720px; margin: 0 auto 16px; display: grid; gap: 6px; text-align: left; }
+#lobby-saves { margin: 14px 0 0; max-width: none; }
+#saves h3, #lobby-saves h3 { margin: 0 0 2px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.save-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; background: rgba(255,255,255,.05);
+  border-left: 3px solid var(--cc, var(--gold)); }
+.save-row > div { flex: 1; min-width: 0; font-size: 14px; }
+.save-when { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.save-row button { padding: 7px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.06); font-weight: 600; }
+.save-row button.primary { background: linear-gradient(#f2c879, #c98d3a); color: #241608; border-color: #f2c879; }
+.save-row button:disabled { opacity: .45; cursor: not-allowed; }
+.save-row button.del { padding: 7px 10px; }
+
+/* ------------------------------ Accounts --------------------------------- */
+#account-bar { display: flex; gap: 12px; align-items: center; justify-content: center; margin: -10px 0 12px; color: var(--muted); font-size: 14px; }
+#account-bar b { color: var(--gold); }
+#btn-account { background: none; border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 5px 12px; font-size: 13px; }
+#btn-account:hover { background: rgba(255,255,255,.08); }
+.auth-modal { max-width: 420px; }
+#auth-why { color: var(--gold); margin: -4px 0 10px; min-height: 0; }
+#auth-why:empty { display: none; }
+#auth-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+#auth-tabs button { flex: 1; padding: 7px; border-radius: 8px; border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.04); }
+#auth-tabs button.on { background: linear-gradient(#f2c879, #c98d3a); color: #241608; border-color: #f2c879; font-weight: 600; }
+#auth-form { display: grid; gap: 8px; }
+#auth-form input { padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,.2); background: rgba(0,0,0,.3); color: inherit; font-size: 15px; }
+#auth-form button { padding: 10px; border-radius: 8px; border: 1px solid #f2c879; background: linear-gradient(#f2c879, #c98d3a); color: #241608; font-weight: 700; }
+#auth-form button:disabled { opacity: .6; }
+#auth-error { color: #ff8a7a; font-size: 13px; min-height: 16px; }

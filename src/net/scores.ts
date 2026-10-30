@@ -2,6 +2,7 @@
 // recorded by the server itself; solo runs are reported from here.
 
 import type { RunResult, ScoreEntry } from './protocol';
+import { sessionToken } from './account';
 
 const URL_ = 'api/leaderboard';
 
@@ -20,12 +21,12 @@ export async function fetchBoards(): Promise<Boards | null> {
 
 export interface Submitted { id: string; key: string; rank: number | null }
 
-/** Records a solo run, or updates the one submitted earlier (`prev`). Null if it couldn't. */
+/** Records a solo run (signed in), or updates the one submitted earlier (`prev`). Null if it couldn't. */
 export async function submitSolo(run: RunResult, prev?: Submitted | null): Promise<Submitted | null> {
   try {
     const res = await fetch(URL_, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionToken() ?? ''}` },
       body: JSON.stringify({ run, id: prev?.id, key: prev?.key }),
     });
     return res.ok ? ((await res.json()) as Submitted) : null;

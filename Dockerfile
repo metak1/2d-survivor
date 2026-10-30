@@ -3,21 +3,21 @@
 #   docker build -t nightfall-bastion .
 #   docker run -d --name nightfall -p 3000:3000 -v nightfall-data:/app/data --restart unless-stopped nightfall-bastion
 #
-# The volume keeps the leaderboards (/app/data/leaderboard.json) across container rebuilds.
+# The volume keeps the database (/app/data/nightfall.db: accounts, saved runs, leaderboards) across rebuilds.
 #
 # Build from a checkout where `npm run import-assets` has already filled public/assets/ (the sprite
 # packs aren't in git), or the game will show placeholder characters.
 
-FROM node:22-alpine AS build
+FROM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 COPY . .
 RUN npm run build
 
-FROM node:22-alpine
+FROM node:24-alpine
 WORKDIR /app
-ENV NODE_ENV=production PORT=3000 HOST=0.0.0.0 LEADERBOARD_FILE=/app/data/leaderboard.json
+ENV NODE_ENV=production PORT=3000 HOST=0.0.0.0 DB_FILE=/app/data/nightfall.db
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 COPY --from=build /app/dist ./dist

@@ -13,7 +13,7 @@
     "import-assets": "node scripts/import-assets.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13"
   },
   "dependencies": {
     "phaser": "^3.90.0",

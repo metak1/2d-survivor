@@ -40,4 +40,12 @@ const http = createServer((req, res) => {
 });
 
 const game = attachGameServer(http);
+// Save every running room before stopping (Ctrl+C, docker stop, systemctl stop).
+for (const sig of ['SIGINT', 'SIGTERM'] as const) {
+  process.on(sig, () => {
+    game.saveAll();
+    console.log('Runs saved. Bye.');
+    process.exit(0);
+  });
+}
 http.listen(PORT, HOST, () => console.log(`Nightfall Bastion on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`));

@@ -13,15 +13,23 @@ import { NO_INTENT, type Intent } from '../src/sim/player';
 import { encodeSnapshot, NET_EVENTS, type NetEvent } from '../src/net/snapshot';
 import type { ClientMsg, LobbyMember, RoomInfo, ServerMsg } from '../src/net/protocol';
 import { leaderboard } from './leaderboard';
+import { accounts } from './accounts';
+import { randomBytes } from 'node:crypto';
+import { deleteSave, readSave, saveMetas, validSaveId, writeSave } from './saves';
+import { loadGame, restorePlayer, saveGame, savePlayer, type PlayerSave, type SaveData } from '../src/sim/save';
 import { nightProgress } from '../src/sim/cycle';
 
 /** Steps between snapshots (60 / 2 = 30 a second). */
 const SNAP_EVERY = 2;
+/** Steps between autosaves (30 seconds). */
+const SAVE_EVERY = 60 * 30;
 
 /** A connected (or briefly disconnected) person. Owned by GameServer. */
 export interface Client {
   id: number;
   token: string;
+  /** The signed-in account (its characters and saves follow it). */
+  account: string;
   name: string;
   cls: ClassId;
   /** Starting weapon this player unlocked for `cls` (reported by their browser). */
@@ -62,8 +70,11 @@ export class Room {
   private steps = 0;
   private lastSnap = -1;
   /** Everyone who played in the current run, by player id, and its leaderboard entry once recorded. */
-  private roster = new Map<number, { name: string; cls: ClassId }>();
+  private roster = new Map<number, { name: string; cls: ClassId; account?: string }>();
   private entry: { id: string; key: string } | null = null;
+  /** The run's save file, and characters whose players are away (they get them back on joining). */
+  private saveId: string | null = null;
+  private reserve: PlayerSave[] = [];
 
   constructor(readonly code: string, readonly isPublic: boolean, private onEmpty: (r: Room) => void) {}
 
@@ -132,6 +143,33 @@ export class Room {
           this.joinRun(c);
         }
         break;
+      case 'resume': {
+        if (this.running) return c.send?.({ t: 'error', msg: 'A run is already going in this room' });
+        if (c !== this.host) return c.send?.({ t: 'error', msg: 'Only the host can resume a run' });
+        const host = accounts.byId(c.account);
+        const save = validSaveId(msg.id) && host && accounts.ownsSave(host, msg.id) ? readSave(msg.id) : null;
+        if (!save) return c.send?.({ t: 'error', msg: 'That saved run no longer exists' });
+        try { this.startRun(save, msg.id); } catch (err) {
+          console.error(`[room ${this.code}] couldn't resume ${msg.id}:`, err);
+          this.game = null;
+          c.send?.({ t: 'error', msg: "That save couldn't be loaded" });
+        }
+        break;
+      }
+      case 'saves': {
+        const a = accounts.byId(c.account);
+        if (!a) break;
+        const ids = accounts.savesOf(a, 'online'), saves = saveMetas(ids);
+        // Runs that are gone (lost, or expired) leave the list.
+        for (const id of ids) if (!saves.some(s => s.id === id)) accounts.dropSave(a, id);
+        c.send?.({ t: 'saveList', saves });
+        break;
+      }
+      case 'forgetSave': {
+        const a = accounts.byId(c.account);
+        if (a && validSaveId(msg.id)) accounts.dropSave(a, msg.id);
+        break;
+      }
       case 'input':
         if (typeof msg.seq === 'number') c.seq = msg.seq;
         c.intent = cleanIntent(msg.intent);
@@ -155,9 +193,12 @@ export class Room {
 
   // ----------------------------------------------------------------- runs
 
-  private startRun(): void {
-    const g = new Game();
+  /** Starts a new run, or resumes `save`: its characters wait in reserve for their players. */
+  private startRun(save?: SaveData, saveId?: string): void {
+    const g = save ? loadGame(save) : new Game();
     this.game = g;
+    this.saveId = saveId ?? randomBytes(8).toString('hex');
+    this.reserve = [];
     this.events = [];
     for (const name of NET_EVENTS) {
       g.events.on(name, payload => {
@@ -171,8 +212,15 @@ export class Room {
     this.steps = 0;
     this.lastSnap = -1;
     this.roster.clear();
-    this.entry = null;
-    console.log(`[room ${this.code}] run started with ${this.members.filter(c => c.send).length} player(s)`);
+    this.entry = save?.extra?.lb ?? null;
+    if (save) {
+      for (const p of [...g.players]) {
+        this.reserve.push(savePlayer(g, p));
+        this.roster.set(p.id, { name: p.name, cls: p.cls, account: p.account });
+        g.removePlayer(p.id);
+      }
+    }
+    console.log(`[room ${this.code}] run ${save ? `resumed (${saveId}, day ${g.day})` : 'started'} with ${this.members.filter(c => c.send).length} player(s)`);
     // Everyone still connected comes along, including people looking at the last run's results.
     for (const c of this.members) c.player = null;
     for (const c of this.members) if (c.send) this.joinRun(c);
@@ -182,9 +230,16 @@ export class Room {
   private joinRun(c: Client): void {
     const g = this.game;
     if (!g || g.over || c.player !== null) return;
-    if (g.players.length >= MAX_PLAYERS) return c.send?.({ t: 'error', msg: 'The run is full' });
-    const p = g.addPlayer(c.cls, c.name, c.heir);
-    this.roster.set(p.id, { name: p.name, cls: p.cls });
+    // A returning player gets their character back (by account), else, when no new ones fit, one of their class.
+    let back = this.reserve.find(r => r.player.account === c.account);
+    if (!back && g.players.length + this.reserve.length >= MAX_PLAYERS) {
+      back = this.reserve.find(r => r.player.cls === c.cls) ?? this.reserve[0];
+    }
+    if (!back && g.players.length >= MAX_PLAYERS) return c.send?.({ t: 'error', msg: 'The run is full' });
+    if (back) this.reserve.splice(this.reserve.indexOf(back), 1);
+    const p = back ? restorePlayer(g, back) : g.addPlayer(c.cls, c.name, c.heir);
+    p.account = c.account;
+    this.roster.set(p.id, { name: p.name, cls: p.cls, account: c.account });
     c.player = p.id;
     c.version = -1;
     c.seq = 0;
@@ -201,13 +256,16 @@ export class Room {
     const p = g.playerById(c.player);
     c.player = null;
     if (p) {
+      // Their character waits for them (and stays in the save).
+      if (!g.over) this.reserve.push(savePlayer(g, p));
       g.removePlayer(p.id);
       if (g.players.length) g.fx.toast(`${p.name} left the run.`);
     }
-    // Nobody left playing: the run is over.
+    // Nobody left playing: save the run for later and close it.
     if (!g.players.length) {
-      if (!g.over) this.record();
+      if (!g.over) { this.record(); this.persist(); }
       this.game = null;
+      this.reserve = [];
     }
   }
 
@@ -228,8 +286,11 @@ export class Room {
       }
       g.step(STEP);
       if (++this.steps % SNAP_EVERY === 0 || g.over) this.broadcastSnapshot();
+      if (this.steps % SAVE_EVERY === 0 && !g.over) this.persist();
       if (g.over) {
         console.log(`[room ${this.code}] run ended after ${g.stats.nights} night(s)`);
+        // A lost run can't be resumed.
+        if (this.saveId) { deleteSave(this.saveId); accounts.dropSaveEverywhere(this.saveId); }
         this.record();
         this.broadcastRoom();
         return;
@@ -251,6 +312,19 @@ export class Room {
       c.version = g.world.version;
     }
     this.lastSnap = g.time;
+  }
+
+  /** Saves the run (with the characters of players who are away) and tells the players its id. */
+  persist(): void {
+    const g = this.game;
+    if (!g || g.over || !this.saveId) return;
+    const data: SaveData = { ...saveGame(g, this.reserve), extra: { lb: this.entry } };
+    writeSave(this.saveId, data);
+    // Everyone who played in it can resume it.
+    for (const r of this.roster.values()) {
+      const a = r.account ? accounts.byId(r.account) : undefined;
+      if (a) accounts.addSave(a, this.saveId, 'online');
+    }
   }
 
   /** Puts the run on the leaderboard (at the win, and again when it finally ends). */
@@ -281,6 +355,7 @@ export class Room {
   /** Something went badly wrong in this room: tell everyone and close the run. */
   crash(err: unknown): void {
     console.error(`[room ${this.code}] crashed:`, err);
+    // Keep what we can: the last autosave stays on disk.
     this.game = null;
     for (const c of this.members) {
       c.player = null;

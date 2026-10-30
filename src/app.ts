@@ -10,6 +10,14 @@ import type { Player } from './sim/player';
 import type { NetClient } from './net/client';
 import { UI } from './ui/ui';
 import { heirloomFor } from './profile';
+import { loadGame, saveGame } from './sim/save';
+import { deleteSolo, newSaveId, writeLocal, type ContinueEntry } from './ui/saves';
+import { account, fetchSave, signedIn, uploadSave } from './net/account';
+import type { SaveData } from './sim/save';
+
+/** Signed in, solo saves go to the account at most this often (and on pause and quit). */
+const UPLOAD_EVERY = 30_000;
+let lastUpload = 0;
 
 /** hub: the online room browser; lobby: inside an online room, between runs. */
 /** victory: the run was just won (solo pauses there; online it keeps going behind the screen). */
@@ -35,6 +43,11 @@ export const App = {
   me: 0,
   /** Connection to the game server while playing online. */
   net: null as NetClient | null,
+  /** Solo: this run's save slot, and its leaderboard entry (kept in the save). */
+  saveId: null as string | null,
+  /** Account the solo run belongs to (null: a guest's), so signing in or out mid-run can't move it. */
+  saveOwner: null as string | null,
+  lbEntry: null as { id: string; key: string; rank: number | null } | null,
   build: freshBuild(),
   phaser: null as Phaser.Game | null,
   /** Characters whose sprite sheets weren't found (drawn as placeholders). */
@@ -60,8 +73,52 @@ export function startGame(cls: ClassId): void {
   App.net?.close();
   App.net = null;
   const g = new Game();
-  App.me = g.addPlayer(cls, App.name || 'You', heirloomFor(cls)).id;
+  App.me = g.addPlayer(cls, account()?.settings.name ?? (App.name || 'You'), heirloomFor(cls)).id;
   begin(g);
+  App.saveId = newSaveId();
+  App.saveOwner = account()?.id ?? null;
+  App.lbEntry = null;
+  saveRun(true);
+}
+
+/** Solo: picks a saved run back up where it was left (from this browser or the account, whichever is newer). */
+export async function continueRun(entry: ContinueEntry): Promise<void> {
+  // The list keeps the newer copy: this browser's (`local`) or the account's.
+  let data: SaveData, g: Game;
+  try {
+    data = entry.local ?? await fetchSave(entry.id);
+    g = loadGame(data);
+  } catch (err) {
+    UI.toast(err instanceof Error ? err.message : "That save couldn't be loaded");
+    return;
+  }
+  App.net?.close();
+  App.net = null;
+  App.cls = g.players[0].cls;
+  App.me = g.players[0].id;
+  begin(g);
+  App.saveId = entry.id;
+  App.saveOwner = account()?.id ?? null;
+  App.lbEntry = (data.extra?.lb as typeof App.lbEntry) ?? null;
+  // Saving right away also sends the account a local copy it hadn't received yet.
+  saveRun(true);
+  UI.toast(`Welcome back: day ${g.day}${g.phase === 'night' ? ', night' : ''}.`);
+}
+
+/**
+ * Solo: saves the run in its slot, in this browser and (signed in) on the account, at most every
+ * UPLOAD_EVERY unless `now`. A lost run's save is deleted: a defeat can't be undone by reloading.
+ */
+export function saveRun(now = false): void {
+  const g = App.game, id = App.saveId;
+  if (App.net || !g || !id || (account()?.id ?? null) !== App.saveOwner) return;
+  if (g.over) { void deleteSolo(id); return; }
+  const data: SaveData = { ...saveGame(g), extra: { lb: App.lbEntry } };
+  writeLocal(id, data);
+  if (signedIn() && (now || performance.now() - lastUpload > UPLOAD_EVERY)) {
+    lastUpload = performance.now();
+    void uploadSave(id, data).catch(() => { lastUpload = 0; /* kept here; tried again next time */ });
+  }
 }
 
 /** Online: the server put us in a run and the first snapshot has arrived. */
@@ -80,6 +137,7 @@ function begin(g: Game): void {
 
 /** Leaves the run: back to the class menu (solo) or the room lobby (online). */
 export function toMenu(): void {
+  saveRun(true);
   App.phaser!.scene.stop('game');
   App.game = null;
   if (App.net) {
@@ -95,6 +153,7 @@ export function toMenu(): void {
 /** Solo: pauses the game. Online the run keeps going; this just opens the menu. */
 export function pause(): void {
   if (App.mode !== 'playing') return;
+  saveRun(true);
   App.mode = 'paused';
   UI.showPause();
 }

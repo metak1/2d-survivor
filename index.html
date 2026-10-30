@@ -70,12 +70,17 @@
       <div id="assets-warning" class="hidden">
         Character art not found. Run <code>npm run import-assets</code> to import your sprite packs. Placeholders are shown for now.
       </div>
+      <div id="account-bar">
+        <span id="account-who"></span>
+        <button id="btn-account"></button>
+      </div>
       <div id="online-bar">
-        <input id="player-name" maxlength="16" placeholder="Your name" autocomplete="off">
+        <input id="player-name" maxlength="16" placeholder="Your name" autocomplete="off" title="The name other players and the leaderboard see">
         <span>Pick a class to play solo, or</span>
         <button id="btn-online">Play online (co-op, up to 4)</button>
         <div id="online-error"></div>
       </div>
+      <div id="saves" class="hidden"></div>
       <div id="class-cards"></div>
       <div id="best"></div>
       <button id="btn-board-menu" class="board-link">🏆 Leaderboards</button>
@@ -128,6 +133,7 @@
       <div id="lobby-members"></div>
       <div class="lobby-label">Your class</div>
       <div id="lobby-classes"></div>
+      <div id="lobby-saves" class="hidden"></div>
       <div class="buttons"><button id="btn-lobby-start" class="primary">Start</button></div>
     </div>
   </div>
@@ -237,6 +243,29 @@
         <button id="btn-over-menu">Choose class</button>
         <button id="btn-over-board">🏆 Leaderboards</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Sign in / create an account -->
+  <div id="auth" class="screen hidden">
+    <div class="modal auth-modal">
+      <div class="modal-head">
+        <h2 id="auth-title">Sign in</h2>
+        <div class="points"></div>
+        <button id="btn-auth-close" class="close" title="Close">✕</button>
+      </div>
+      <div id="auth-why"></div>
+      <div id="auth-tabs">
+        <button id="tab-login" class="on">Sign in</button>
+        <button id="tab-register">Create account</button>
+      </div>
+      <form id="auth-form" autocomplete="on">
+        <input id="auth-user" name="username" placeholder="Username" autocomplete="username" maxlength="16" required>
+        <input id="auth-pass" name="password" type="password" placeholder="Password" autocomplete="current-password" required>
+        <div id="auth-error"></div>
+        <button id="auth-submit" class="primary" type="submit">Sign in</button>
+      </form>
+      <div class="modal-foot" id="auth-foot">Your account keeps your heirlooms, best runs and saved runs on this server, on any device. Online play needs one.</div>
     </div>
   </div>
 

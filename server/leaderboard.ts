@@ -1,95 +1,69 @@
-// Leaderboards, one per party size (1 to MAX_PLAYERS), kept in a JSON file next to the server.
+// Leaderboards, one per party size (1 to MAX_PLAYERS), kept in the server's database (db.ts).
 // Online runs are recorded by the room that ran them. Solo runs are played in the browser, so the
-// browser reports them (POST /api/leaderboard): those scores are taken on trust.
-//   LEADERBOARD_FILE=/path/to/file.json changes where it's kept (default: data/leaderboard.json).
+// browser reports them (POST /api/leaderboard, signed in; see api.ts): their numbers are taken on trust.
 
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import type { IncomingMessage, ServerResponse } from 'node:http';
-import { dirname, resolve } from 'node:path';
 import { MAX_PLAYERS } from '../src/config';
 import { CLASS_IDS } from '../src/data/classes';
 import type { ClassId } from '../src/data/types';
 import type { RunResult, ScoreEntry } from '../src/net/protocol';
+import { db } from './db';
 
-const FILE = resolve(process.env.LEADERBOARD_FILE || 'data/leaderboard.json');
 /** Entries kept per party size. */
 const KEEP = 100;
 /** Entries listed per party size. */
 const SHOW = 20;
 
-interface Stored extends ScoreEntry {
-  /** Lets whoever submitted an entry update it later (a solo run going on after its win). */
-  key: string;
-}
-
 /** Best first: more nights, then a win, then further into the last night, then more kills, then faster. */
-const better = (a: ScoreEntry, b: ScoreEntry) =>
-  b.nights - a.nights || Number(b.won) - Number(a.won) || (b.progress ?? 0) - (a.progress ?? 0) || b.kills - a.kills || a.time - b.time;
+const ORDER = 'nights DESC, won DESC, progress DESC, kills DESC, time ASC';
+
+interface Row { id: string; key: string; size: number; players: string; nights: number; won: number; progress: number; kills: number; time: number; online: number; date: number }
+
+const toEntry = (r: Row): ScoreEntry => ({
+  id: r.id, size: r.size, players: JSON.parse(r.players), nights: r.nights, won: !!r.won, progress: r.progress,
+  kills: r.kills, time: r.time, online: !!r.online, date: r.date,
+});
+
+const q = {
+  insert: db.prepare(`INSERT INTO scores (id, key, size, players, nights, won, progress, kills, time, online, date)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+  update: db.prepare(`UPDATE scores SET size = ?, players = ?, nights = ?, won = ?, progress = ?, kills = ?, time = ?, online = ?, date = ?
+                      WHERE id = ? AND key = ?`),
+  get: db.prepare('SELECT * FROM scores WHERE id = ?'),
+  top: db.prepare(`SELECT * FROM scores WHERE size = ? ORDER BY ${ORDER} LIMIT ?`),
+  ids: db.prepare(`SELECT id FROM scores WHERE size = ? ORDER BY ${ORDER}`),
+  prune: db.prepare(`DELETE FROM scores WHERE size = ? AND id NOT IN (SELECT id FROM scores WHERE size = ? ORDER BY ${ORDER} LIMIT ?)`),
+};
 
 export class Leaderboard {
-  private entries: Stored[] = [];
-  private saveTimer: NodeJS.Timeout | null = null;
-
-  constructor() {
-    try {
-      if (existsSync(FILE)) this.entries = JSON.parse(readFileSync(FILE, 'utf8'));
-      if (!Array.isArray(this.entries)) this.entries = [];
-    } catch (err) {
-      console.error(`leaderboard: couldn't read ${FILE}, starting empty:`, err);
-      this.entries = [];
-    }
-  }
-
   /** Adds a run, or updates the run `id` if `key` matches. Returns its id, key and rank in its bracket. */
   submit(run: RunResult, id?: string, key?: string): { id: string; key: string; rank: number | null } {
-    let e = id ? this.entries.find(x => x.id === id && x.key === key) : undefined;
-    if (e) Object.assign(e, run, { date: Date.now() });
-    else {
-      e = { ...run, id: randomBytes(6).toString('hex'), key: randomBytes(12).toString('hex'), date: Date.now() };
-      this.entries.push(e);
+    const vals = [run.size, JSON.stringify(run.players), run.nights, run.won ? 1 : 0, run.progress ?? 0, run.kills, run.time, run.online ? 1 : 0, Date.now()] as const;
+    let updated = false;
+    if (id && key) updated = q.update.run(...vals, id, key).changes > 0;
+    if (!updated) {
+      id = randomBytes(6).toString('hex');
+      key = randomBytes(12).toString('hex');
+      const [size, players, nights, won, progress, kills, time, online, date] = vals;
+      q.insert.run(id, key, size, players, nights, won, progress, kills, time, online, date);
     }
-    this.prune(run.size);
-    this.save();
-    return { id: e.id, key: e.key, rank: this.rank(e.id) };
+    q.prune.run(run.size, run.size, KEEP);
+    return { id: id!, key: key!, rank: this.rank(id!) };
   }
 
   /** 1-based rank of an entry within its party size, or null if it fell off the board. */
   rank(id: string): number | null {
-    const e = this.entries.find(x => x.id === id);
+    const e = q.get.get(id) as Row | undefined;
     if (!e) return null;
-    return this.bracket(e.size).indexOf(e) + 1;
+    const ids = (q.ids.all(e.size) as { id: string }[]).map(r => r.id);
+    return ids.indexOf(id) + 1;
   }
 
   /** The top of every bracket, without the edit keys. */
   top(): Record<number, ScoreEntry[]> {
     const out: Record<number, ScoreEntry[]> = {};
-    for (let n = 1; n <= MAX_PLAYERS; n++) out[n] = this.bracket(n).slice(0, SHOW).map(({ key: _key, ...e }) => e);
+    for (let n = 1; n <= MAX_PLAYERS; n++) out[n] = (q.top.all(n, SHOW) as unknown as Row[]).map(toEntry);
     return out;
-  }
-
-  private bracket(size: number): Stored[] {
-    return this.entries.filter(e => e.size === size).sort(better);
-  }
-
-  private prune(size: number): void {
-    const drop = new Set(this.bracket(size).slice(KEEP));
-    if (drop.size) this.entries = this.entries.filter(e => !drop.has(e));
-  }
-
-  /** Writes soon (several submits in a row make one write), atomically. */
-  private save(): void {
-    if (this.saveTimer) return;
-    this.saveTimer = setTimeout(() => {
-      this.saveTimer = null;
-      try {
-        mkdirSync(dirname(FILE), { recursive: true });
-        writeFileSync(FILE + '.tmp', JSON.stringify(this.entries));
-        renameSync(FILE + '.tmp', FILE);
-      } catch (err) {
-        console.error(`leaderboard: couldn't write ${FILE}:`, err);
-      }
-    }, 500);
   }
 }
 
@@ -116,47 +90,4 @@ export function parseRun(raw: unknown, soloOnly: boolean): RunResult | null {
   }
   const progress = typeof r.progress === 'number' && r.progress >= 0 && r.progress < 1 ? Math.floor(r.progress * 100) / 100 : 0;
   return { size, players, nights, won: !!r.won, kills, time, online: false, progress };
-}
-
-// ----------------------------------------------------------------- HTTP
-
-/** Submissions per address per minute. */
-const POST_LIMIT = 12;
-const posts = new Map<string, { n: number; since: number }>();
-
-const json = (res: ServerResponse, code: number, body: unknown) =>
-  res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(body));
-
-/**
- * GET  /api/leaderboard        → { boards: { 1: [...], 2: [...], ... } }
- * POST /api/leaderboard        { run, id?, key? } → { id, key, rank }   (solo runs only)
- * Returns false for other URLs.
- */
-export function handleApi(req: IncomingMessage, res: ServerResponse): boolean {
-  const url = (req.url ?? '').split('?')[0];
-  if (!url.endsWith('/api/leaderboard')) return false;
-  if (req.method === 'GET') { json(res, 200, { boards: leaderboard.top() }); return true; }
-  if (req.method !== 'POST') { json(res, 405, { error: 'GET or POST' }); return true; }
-
-  const ip = req.socket.remoteAddress ?? '?', now = Date.now();
-  const rate = posts.get(ip);
-  if (!rate || now - rate.since > 60_000) posts.set(ip, { n: 1, since: now });
-  else if (++rate.n > POST_LIMIT) { json(res, 429, { error: 'Too many submissions' }); return true; }
-  if (posts.size > 5000) posts.clear();
-
-  let body = '';
-  req.on('data', chunk => {
-    body += chunk;
-    if (body.length > 4096) { json(res, 413, { error: 'Too large' }); req.destroy(); }
-  });
-  req.on('end', () => {
-    if (res.writableEnded) return;
-    let msg: Record<string, unknown>;
-    try { msg = JSON.parse(body); } catch { json(res, 400, { error: 'Bad JSON' }); return; }
-    const run = parseRun(msg?.run, true);
-    if (!run) { json(res, 400, { error: 'Bad run' }); return; }
-    const id = typeof msg.id === 'string' ? msg.id : undefined, key = typeof msg.key === 'string' ? msg.key : undefined;
-    json(res, 200, leaderboard.submit(run, id, key));
-  });
-  return true;
 }

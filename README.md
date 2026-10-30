@@ -33,7 +33,15 @@ The imported art is git-ignored because the packs aren't redistributable. Withou
 
 ## Playing online
 
-Anyone who can open your server's address can play: click **Play online**, then either start a room or join one.
+Anyone who can open your server's address can play: click **Play online**, sign in (or create an account), then either start a room or join one.
+
+**Accounts.** Online play needs an account: a username and a password, kept on your server (passwords are hashed with scrypt; there's no email and no password recovery). Solo play works without one, as a guest. An account keeps:
+- your saved runs, solo and online, on any device;
+- your progress: heirloom unlocks and your best run;
+- your display name (the name field on the main menu), which other players and the leaderboard see;
+- your place on the leaderboard: solo runs only go on it when you're signed in, under your account.
+
+Signing in for the first time brings along what you did as a guest in that browser: its progress and its saved solo runs move to the account.
 
 - **Public rooms** are listed for everyone on the server. **Private rooms** can only be joined with their 5-letter code or the invite link (**Copy invite link** in the room).
 - Each room is one co-op run for up to 4 players. The host (👑) starts the run; people who arrive later can join it while it's going.
@@ -42,11 +50,13 @@ Anyone who can open your server's address can play: click **Play online**, then 
 
 In co-op, wood, stone, gold and the Hearth are shared, and everyone gets the XP from every kill. Talents, companions and summons are your own. Towers use the best tower talents anyone in the party has. The Cleric's heals and shields (Holy Nova, Mend, Consecration, Holy Ward) and the War Banner work on other players too. Starting the night early is a vote: it begins once every connected player has pressed N (players who dropped don't block it). The run doesn't pause: Esc opens the menu while the game carries on. The run ends when the Hearth falls, or when everyone has left. After a win, the run goes on in endless mode for whoever stays.
 
+**Saved runs.** Online runs are saved on the server every 30 seconds and when everyone leaves. Your account remembers the runs you played in: open a room and they're listed under **Saved runs**, where the host can **Resume** one of theirs. Everyone in the room comes along. Returning players get their own character back (matched by account, whatever name or class they picked since; when no new characters fit, someone else's of the same class), newcomers start fresh, and characters whose players stay away wait in the save for them. A player who leaves mid-run keeps their character too. Solo runs are saved every 15 seconds, when you pause, quit or close the tab, and listed under **Continue a run** on the main menu. Signed in, they're kept on your account (the newest five; a copy also stays in the browser, and whichever is newer is used); as a guest, in the browser (the newest three). A run that's lost is deleted, so a defeat can't be undone by reloading.
+
 For a quick game on your own network, `npm run dev` is enough: friends open the **Network** address it prints.
 
 ## Hosting a server
 
-The server is one Node process that serves the game page and runs every room. It needs Node 20+ (or Docker) and one open port.
+The server is one Node process that serves the game page and runs every room. It needs Node 22.13 or newer (or Docker) and one open port.
 
 **With Docker** (build where `public/assets/` already has the imported art):
 
@@ -69,7 +79,16 @@ npm start                  # or install deploy/nightfall-bastion.service for sys
 - [deploy/Caddyfile](deploy/Caddyfile): Caddy gets the certificate automatically. Easiest.
 - [deploy/nginx.conf](deploy/nginx.conf): nginx with certbot. The `Upgrade` headers are required for the game's WebSocket.
 
-**Leaderboards** are saved in `data/leaderboard.json` in the folder the server runs from (the top 100 runs per party size). The Docker command above keeps them in the `nightfall-data` volume. Online runs are recorded by the server. Solo runs are played in the browser, which reports its own result, so solo scores could be faked by someone determined to.
+**Data** lives in one SQLite database, `data/nightfall.db` in the folder the server runs from (Node's built-in `node:sqlite`; nothing to install). It holds:
+- accounts and sign-in sessions (sessions last 30 days);
+- saved runs: online runs, and signed-in players' solo runs (ones untouched for 30 days are deleted at startup);
+- the leaderboards (the top 100 runs per party size).
+
+The server saves every running room when it's stopped with Ctrl+C, `docker stop` or `systemctl stop`. To back it up while it runs, use `sqlite3 data/nightfall.db ".backup backup.db"` (or stop the server and copy the `data/` folder). The Docker command above keeps `data/` in the `nightfall-data` volume.
+
+Servers from before the database kept these in `data/accounts.json`, `data/leaderboard.json` and `data/saves/`. On its first start the server imports them into the database and renames them to `*.imported` (delete those once you're happy).
+
+Online runs are recorded on the leaderboard by the server. Solo runs are played in the browser, which reports its own result: they need a signed-in account (so names can't be borrowed), but their numbers could still be faked by someone determined to.
 
 **Settings** (environment variables):
 
@@ -79,7 +98,7 @@ npm start                  # or install deploy/nightfall-bastion.service for sys
 | `HOST` | `0.0.0.0` | Address to listen on; `127.0.0.1` when behind a proxy |
 | `MAX_ROOMS` | `100` | Rooms open at once |
 | `MAX_CLIENTS` | `400` | Connections at once |
-| `LEADERBOARD_FILE` | `data/leaderboard.json` | Where the leaderboards are saved |
+| `DB_FILE` | `data/nightfall.db` | The database: accounts, saved runs, leaderboards |
 | `SIMULATE_LAG_MS` | `0` | Testing aid: delays every message this much each way, to feel how the game plays from far away |
 
 `GET /health` returns the number of rooms, running games, players and connections as JSON, for uptime monitors. The server logs when rooms open, start a run and close.
@@ -145,7 +164,11 @@ src/
 server/
   server.ts   Connections, sessions and reconnects, rate limits, the room list
   room.ts     One room: its lobby, the Game it runs, snapshots to its players
-  leaderboard.ts  Leaderboards: storage, ranking, and the /api/leaderboard endpoint
+  db.ts       The SQLite database: schema, migrations, importing older JSON data
+  leaderboard.ts  Leaderboards: ranking and storage
+  saves.ts    Saved runs
+  accounts.ts Accounts, passwords and sign-in sessions
+  api.ts      The HTTP API: leaderboard, accounts, solo saves
   main.ts     Production entry: serves dist/, /health, /api, and the game server on one port
 deploy/       Reverse proxy (Caddy, nginx) and systemd examples for self-hosting
 scripts/import-assets.mjs   Asset pack importer

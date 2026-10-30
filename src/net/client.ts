@@ -11,6 +11,8 @@ import type { Intent } from '../sim/player';
 import { UI } from '../ui/ui';
 import { Predictor } from './predict';
 import { heirloomFor } from '../profile';
+import { sessionToken } from './account';
+import type { SaveMeta } from '../sim/save';
 import { PROTOCOL, WS_PATH, type ClientMsg, type LobbyMember, type RoomInfo, type ServerMsg } from './protocol';
 import { Interpolator } from './interp';
 import { applySnapshot, smooth } from './snapshot';
@@ -32,7 +34,6 @@ export class NetClient {
   ping: number | null = null;
   reconnecting = false;
   private ws: WebSocket | null = null;
-  private name = '';
   private game: Game | null = null;
   private player = 0;
   private started = false;
@@ -45,9 +46,8 @@ export class NetClient {
   private attempts = 0;
   private pingTimer = 0;
 
-  /** Connects to the server that served this page. Resolves once the server says hello. */
-  connect(name: string): Promise<void> {
-    this.name = name;
+  /** Connects to the server that served this page (signed in). Resolves once the server says hello. */
+  connect(): Promise<void> {
     this.closing = false;
     return new Promise((resolve, reject) => {
       const ws = this.open();
@@ -62,7 +62,7 @@ export class NetClient {
     ws.onopen = () => {
       let token: string | undefined;
       try { token = sessionStorage.getItem(TOKEN_KEY) ?? undefined; } catch { /* storage unavailable */ }
-      this.send({ t: 'hello', v: PROTOCOL, name: this.name, token });
+      this.send({ t: 'hello', v: PROTOCOL, auth: sessionToken() ?? undefined, token });
       clearInterval(this.pingTimer);
       this.pingTimer = window.setInterval(() => this.send({ t: 'ping', at: performance.now() }), 2000);
     };
@@ -87,6 +87,20 @@ export class NetClient {
   start(): void { this.send({ t: 'start' }); }
   command(cmd: Command): void { this.send({ t: 'cmd', cmd }); }
   leaveRoom(): void { this.send({ t: 'leaveRoom' }); }
+
+  /** Our account's saved online runs (asked for in the lobby). */
+  saveList: { id: string; meta: SaveMeta }[] | null = null;
+  savesAskedAt = 0;
+  askSaves(): void {
+    this.savesAskedAt = Date.now();
+    this.send({ t: 'saves' });
+  }
+  forgetSave(id: string): void {
+    this.saveList = this.saveList?.filter(s => s.id !== id) ?? null;
+    this.send({ t: 'forgetSave', id });
+  }
+  /** Host: resume a saved run with everyone in the room. */
+  resume(id: string): void { this.send({ t: 'resume', id }); }
 
   /** Leave the run (back to the room lobby). */
   leave(): void {
@@ -189,6 +203,10 @@ export class NetClient {
       }
       case 'pong':
         this.ping = Math.round(performance.now() - msg.at);
+        break;
+      case 'saveList':
+        this.saveList = msg.saves;
+        if (App.mode === 'lobby') UI.showLobby();
         break;
       case 'ranked':
         UI.setRank({ size: msg.size, rank: msg.rank, id: msg.id });

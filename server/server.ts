@@ -9,6 +9,8 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { PROTOCOL, WS_PATH, type ClientMsg, type ServerMsg } from '../src/net/protocol';
 import { NO_INTENT } from '../src/sim/player';
 import { Room, type Client } from './room';
+import { pruneSaves } from './saves';
+import { accounts } from './accounts';
 
 const MAX_CLIENTS = Number(process.env.MAX_CLIENTS) || 400;
 const MAX_ROOMS = Number(process.env.MAX_ROOMS) || 100;
@@ -41,6 +43,7 @@ export class GameServer {
   private readonly started = Date.now();
 
   constructor() {
+    pruneSaves();
     setInterval(() => this.tick(), 1000 / 120);
     setInterval(() => this.heartbeat(), 10_000);
     setInterval(() => this.sweep(), 5_000);
@@ -54,6 +57,11 @@ export class GameServer {
       connections: this.conns.size,
       uptime: Math.round((Date.now() - this.started) / 1000),
     };
+  }
+
+  /** Saves every running room (the server is shutting down). */
+  saveAll(): void {
+    for (const room of this.rooms.values()) room.persist();
   }
 
   connect(ws: WebSocket): void {
@@ -130,10 +138,16 @@ export class GameServer {
       return;
     }
     if (conn.client) return;
-    const name = String(msg.name ?? '').trim().slice(0, 16) || 'Player';
+    // Online play needs an account; it also gives the player their name.
+    const account = accounts.fromToken(msg.auth);
+    if (!account) {
+      send({ t: 'error', msg: 'Sign in to play online.', fatal: true });
+      return;
+    }
+    const name = account.settings.name;
     // Resuming a session whose connection dropped: take back the same character.
     const old = typeof msg.token === 'string' ? this.byToken.get(msg.token) : undefined;
-    if (old && !old.send) {
+    if (old && !old.send && old.account === account.id) {
       this.gone.delete(old);
       old.send = send;
       conn.client = old;
@@ -141,7 +155,7 @@ export class GameServer {
       if (old.room) old.room.resume(old); else send({ t: 'noRoom' });
       return;
     }
-    const c: Client = { id: this.nextId++, token: randomBytes(16).toString('hex'), name, cls: 'warrior', heir: null, room: null, player: null,
+    const c: Client = { id: this.nextId++, token: randomBytes(16).toString('hex'), account: account.id, name, cls: 'warrior', heir: null, room: null, player: null,
       intent: { ...NO_INTENT }, casts: [], seq: 0, version: -1, send };
     this.clients.set(c.id, c);
     this.byToken.set(c.token, c);
@@ -203,7 +217,7 @@ export class GameServer {
   }
 }
 
-export { handleApi } from './leaderboard';
+export { handleApi } from './api';
 
 /** Serves the game on an HTTP server's WebSocket upgrades at /ws (other upgrades are left alone). */
 export function attachGameServer(http: Server): GameServer {

@@ -8,7 +8,7 @@ import { RES_ICONS } from '../data/enemies';
 import { SHOP } from '../data/events';
 import type { AltDef, BasicAttackDef, BuildSlot, ClassId, Cost, ResKey, SpellDef } from '../data/types';
 import { Input } from '../core/input';
-import { App, closeForge, closeInventory, closeShop, closeTalents, command, me, openInventory, openTalents, resume, setBuildMode, startGame, toMenu } from '../app';
+import { App, continueRun, saveRun, closeForge, closeInventory, closeShop, closeTalents, command, me, openInventory, openTalents, resume, setBuildMode, startGame, toMenu } from '../app';
 import { InventoryScreen, itemTipHtml } from './inventory';
 import { RARITIES } from '../data/items';
 import { itemIcon, itemName, itemPrice } from '../sim/items';
@@ -23,13 +23,18 @@ import { Minimap } from './minimap';
 import { TalentScreen } from './talents';
 import { ForgeScreen } from './forge';
 import { BoardScreen, heirloomHtml, rankHtml, resultsHtml, runResult } from './results';
-import { heirloomFor, nextHeirloom, recordRun } from '../profile';
-import { submitSolo, type Submitted } from '../net/scores';
+import { heirloomFor, loadBest, mergeGuestProgress, nextHeirloom, recordRun, saveBest } from '../profile';
+import { account, onAccount, pushSettings, restoreSession, signedIn } from '../net/account';
+import { AuthScreen } from './auth';
+import { submitSolo } from '../net/scores';
+import { continueList, deleteSolo, describeSave, moveGuestSaves } from './saves';
 import type { Rarity } from '../data/items';
 import { FINAL_NIGHT } from '../config';
 import { nightProgress } from '../sim/cycle';
 
 const $ = (id: string) => document.getElementById(id)!;
+/** Solo autosave interval. */
+const AUTOSAVE_MS = 15_000;
 
 type Cached = HTMLElement & { _v?: string; _h?: string; _s?: Record<string, string> };
 const setText = (el: HTMLElement, v: string) => { const c = el as Cached; if (c._v !== v) { c._v = v; el.textContent = v; } };
@@ -39,14 +44,6 @@ const setStyle = (el: HTMLElement, k: 'width' | 'height' | 'left' | 'top', v: st
   c._s ??= {};
   if (c._s[k] !== v) { c._s[k] = v; el.style[k] = v; }
 };
-
-interface Best { nights: number; kills: number; cls: string }
-function loadBest(): Partial<Best> {
-  try { return JSON.parse(localStorage.getItem('nightfall_best') || '{}'); } catch { return {}; }
-}
-function saveBest(b: Best): void {
-  try { localStorage.setItem('nightfall_best', JSON.stringify(b)); } catch { /* storage unavailable */ }
-}
 
 const costHtml = (cost: Cost, g?: Game) =>
   (Object.keys(cost) as ResKey[]).map(k => {
@@ -76,17 +73,29 @@ class UIController {
   private shopKey = '';
   private forge = new ForgeScreen();
   private forgeKey = '';
+  private savedAt = 0;
   private board = new BoardScreen();
   /** This run on the leaderboard: our solo submission, and the rank it got (solo or from the server). */
-  private submitted: Submitted | null = null;
   private rank: { size: number; rank: number | null; id: string } | null = null;
   private rankPending = false;
   /** Heirloom this run unlocked, and whether the player chose to end a won run. */
   private unlocked: Rarity | null = null;
   private endedByChoice = false;
 
+  readonly auth = new AuthScreen();
+
   init(): void {
     this.minimap = new Minimap($('minimap') as HTMLCanvasElement);
+    this.auth.init();
+    // Signing in brings this browser's guest progress and saves along, and redraws the menu.
+    let was = signedIn();
+    onAccount(() => {
+      const now = signedIn();
+      if (now && !was) { mergeGuestProgress(); void moveGuestSaves().then(() => { if (App.mode === 'menu') this.renderSoloSaves(); }); }
+      was = now;
+      if (App.mode === 'menu') this.buildMenu();
+    });
+    void restoreSession();
     this.talents.init();
     this.inventory.init();
     $('btn-open-inventory').onclick = () => openInventory();
@@ -110,6 +119,7 @@ class UIController {
     $('talent-alert').onclick = () => openTalents();
     $('btn-hearth-up').onclick = () => { const g = this.game; if (g) command({ c: 'upgrade', id: g.world.hearth.id }); };
     this.initOnline();
+    addEventListener('beforeunload', () => { if (App.game && !App.net) saveRun(); });
     // mousedown rather than click: the menu re-renders as HP changes, which would eat a click.
     $('ctx').addEventListener('mousedown', e => { e.stopPropagation(); this.onContextClick(e); });
     for (const k of ['wood', 'stone', 'gold'] as ResKey[]) $(`res-ico-${k}`).innerHTML = iconHtml(RES_ICONS[k], 22);
@@ -139,7 +149,9 @@ class UIController {
     setText($('pause-title'), App.net ? 'Menu' : 'Paused');
     setText($('pause-note'), App.net ? 'The run keeps going while this is open.' : '');
     $('btn-restart').classList.toggle('hidden', !!App.net);
-    setText($('btn-menu'), App.net ? 'Leave run' : 'Main menu');
+    setText($('btn-menu'), App.net ? 'Leave run' : 'Save & quit');
+    setText($('pause-note'), App.net ? 'The run keeps going while this is open. It\'s saved on the server: leave and come back to it later from the room.'
+      : 'Your run is saved automatically. Pick it up from the main menu.');
     $('pause').classList.remove('hidden');
   }
 
@@ -194,6 +206,44 @@ class UIController {
       ? `Best: survived ${best.nights} night${best.nights === 1 ? '' : 's'} as ${best.cls} (${best.kills} kills)` : '';
     $('controls-menu').innerHTML = this.controlsHtml();
     $('assets-warning').classList.toggle('hidden', App.missingSprites.length === 0);
+    this.auth.renderBar();
+    this.renderName();
+    this.renderSoloSaves();
+  }
+
+  /** The name field: the account's display name when signed in, this browser's otherwise. */
+  private renderName(): void {
+    const input = $('player-name') as HTMLInputElement, a = account();
+    if (document.activeElement !== input) input.value = a ? a.settings.name : App.name;
+  }
+
+  /** "Continue": solo runs saved in this browser and on the account (the newer copy of each). */
+  private renderSoloSaves(): void {
+    const wrap = $('saves'), ask = ++this.savesAsk;
+    void continueList().then(list => {
+      if (ask !== this.savesAsk) return;
+      this.showSoloSaves(wrap, list);
+    });
+  }
+
+  private savesAsk = 0;
+
+  private showSoloSaves(wrap: HTMLElement, list: Awaited<ReturnType<typeof continueList>>): void {
+    wrap.classList.toggle('hidden', !list.length);
+    wrap.innerHTML = list.length ? `<h3>Continue a run${signedIn() ? '' : ' <span class="muted">(saved in this browser: sign in to keep runs on any device)</span>'}</h3>` : '';
+    for (const s of list) {
+      const p = s.meta.players[0], c = CLASSES[p.cls], row = document.createElement('div');
+      row.className = 'save-row';
+      row.style.setProperty('--cc', c.color);
+      row.innerHTML = `<div><b>${escapeHtml(p.name)}</b> <span style="color:${c.color}">${c.name}</span> <span class="muted">Lv ${p.level}</span>
+        <span class="save-when">${describeSave(s.meta)}</span></div>`;
+      const go = document.createElement('button'), del = document.createElement('button');
+      go.className = 'primary'; go.textContent = 'Continue'; go.onclick = () => void continueRun(s);
+      del.className = 'del'; del.textContent = '✕'; del.title = 'Delete this save';
+      del.onclick = () => { if (confirm('Delete this saved run? It can\'t be undone.')) void deleteSolo(s.id).then(() => this.renderSoloSaves()); };
+      row.append(go, del);
+      wrap.appendChild(row);
+    }
   }
 
   /** What starting weapon a class has unlocked, and what unlocks the next one. */
@@ -237,7 +287,6 @@ class UIController {
   startGame(g: Game): void {
     this.game = g;
     this.scout = null;
-    this.submitted = null;
     this.rank = null;
     this.rankPending = false;
     this.unlocked = null;
@@ -311,6 +360,11 @@ class UIController {
 
   update(g: Game, cam: { x: number; y: number; w: number; h: number }): void {
     this.frame++;
+    // Solo autosave (also on pause, quitting and closing the tab).
+    if (!App.net && App.mode === 'playing' && performance.now() - this.savedAt > AUTOSAVE_MS) {
+      this.savedAt = performance.now();
+      saveRun();
+    }
     const p = me(), s = p.stats;
     this.updateParty(g);
     this.refreshLiveScreens(g);
@@ -538,6 +592,7 @@ class UIController {
 
   private gameOver(g: Game): void {
     setBuildMode(false);
+    saveRun(); // a lost run's save is deleted
     const n = g.stats.nights, best = loadBest();
     const isBest = n > 0 && (!best.nights || n > best.nights || (n === best.nights && g.stats.kills > (best.kills ?? 0)));
     if (isBest) saveBest({ nights: n, kills: g.stats.kills, cls: CLASSES[me().cls].name });
@@ -558,6 +613,7 @@ class UIController {
   private victory(g: Game): void {
     setBuildMode(false);
     App.mode = 'victory';
+    saveRun();
     this.unlocked = recordRun(me().cls, g.stats.nights, true) ?? this.unlocked;
     if (!App.net) this.submitSolo(g);
     else this.rankPending = true;
@@ -587,7 +643,8 @@ class UIController {
   private notesExtra = '';
   private renderNotes(extra = this.notesExtra): void {
     this.notesExtra = extra;
-    $('over-notes').innerHTML = rankHtml(this.rank, this.rankPending) + heirloomHtml(me().cls, this.unlocked)
+    const guest = !App.net && !signedIn() ? '<div class="note-rank muted">Sign in to put your solo runs on the leaderboard.</div>' : '';
+    $('over-notes').innerHTML = rankHtml(this.rank, this.rankPending) + guest + heirloomHtml(me().cls, this.unlocked)
       + (extra ? `<div class="note-best">${extra}</div>` : '');
   }
 
@@ -599,12 +656,13 @@ class UIController {
   }
 
   private submitSolo(g: Game): void {
-    if (!g.stats.nights && !g.won) return;
+    if ((!g.stats.nights && !g.won) || !signedIn()) return;
     this.rankPending = true;
-    void submitSolo(runResult(g), this.submitted).then(res => {
+    void submitSolo(runResult(g), App.lbEntry).then(res => {
       if (g !== this.game) return;
       if (!res) { this.rankPending = false; this.renderNotes(); return; }
-      this.submitted = res;
+      App.lbEntry = res;
+      saveRun();
       this.setRank({ size: 1, rank: res.rank, id: res.id });
     });
   }
@@ -682,7 +740,15 @@ class UIController {
 
   private initOnline(): void {
     const name = $('player-name') as HTMLInputElement;
-    try { name.value = localStorage.getItem('nightfall_name') ?? ''; } catch { /* storage unavailable */ }
+    try { App.name = localStorage.getItem('nightfall_name') ?? ''; } catch { /* storage unavailable */ }
+    name.value = App.name;
+    // Signed in, the name is the account's (other players and the leaderboard see it).
+    name.addEventListener('change', () => {
+      const v = name.value.trim().slice(0, 16);
+      if (signedIn()) { if (v) void pushSettings({ ...account()!.settings, name: v }).catch(e => this.onlineError((e as Error).message)); return; }
+      App.name = v;
+      try { localStorage.setItem('nightfall_name', App.name); } catch { /* storage unavailable */ }
+    });
     const code = new URLSearchParams(location.search).get('room');
     if (code && /^[A-Za-z0-9]{5}$/.test(code)) this.inviteCode = code.toUpperCase();
 
@@ -715,13 +781,12 @@ class UIController {
 
   /** Connects to the game server and opens the room browser (or joins an invite's room). */
   private async goOnline(): Promise<void> {
-    const name = $('player-name') as HTMLInputElement;
-    App.name = name.value.trim().slice(0, 16) || 'Player';
-    try { localStorage.setItem('nightfall_name', App.name); } catch { /* storage unavailable */ }
+    // Online play needs an account (it's how players get their characters back in saved runs).
+    if (!signedIn()) return this.auth.show('Online play needs an account.', () => void this.goOnline());
     const net = new NetClient();
     this.onlineError('Connecting…');
     try {
-      await net.connect(App.name);
+      await net.connect();
     } catch (e) {
       this.onlineError(`${(e as Error).message}. Is the server running (npm start)?`);
       return;
@@ -804,9 +869,34 @@ class UIController {
       const n = room.members.length;
       start.textContent = net.isHost ? `Start the run (${n} player${n === 1 ? '' : 's'})` : 'Waiting for the host to start…';
     }
+    this.renderLobbySaves();
     setText($('lobby-status'), `${room.members.length} / 4 players · ${room.public ? 'public' : 'private'}`);
     setText($('lobby-code'), room.code);
     $('lobby').classList.remove('hidden');
+  }
+
+  /** Lobby: our account's saved online runs. The host can resume one. */
+  private renderLobbySaves(): void {
+    const net = App.net, room = net?.room, wrap = $('lobby-saves');
+    if (!net || !room) return;
+    if (room.running) { wrap.classList.add('hidden'); return; }
+    // Ask the server which of our runs still exist, now and then.
+    if (Date.now() - net.savesAskedAt > 4000) net.askSaves();
+    const list = net.saveList ?? [];
+    wrap.classList.toggle('hidden', !list.length);
+    wrap.innerHTML = list.length ? `<h3>Saved runs</h3>${net.isHost ? '' : '<div class="muted">The host can resume one of these.</div>'}` : '';
+    for (const s of list) {
+      const row = document.createElement('div');
+      row.className = 'save-row';
+      const who = s.meta.players.map(p => `<b>${escapeHtml(p.name)}</b> <span style="color:${CLASSES[p.cls].color}">${CLASSES[p.cls].name}</span>`).join(', ');
+      row.innerHTML = `<div>${who}<span class="save-when">${describeSave(s.meta)}</span></div>`;
+      const go = document.createElement('button'), del = document.createElement('button');
+      go.className = 'primary'; go.textContent = 'Resume'; go.disabled = !net.isHost; go.onclick = () => net.resume(s.id);
+      del.className = 'del'; del.textContent = '✕'; del.title = 'Remove from this list';
+      del.onclick = () => { net.forgetSave(s.id); this.renderLobbySaves(); };
+      row.append(go, del);
+      wrap.appendChild(row);
+    }
   }
 }
 
