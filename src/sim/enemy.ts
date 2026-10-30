@@ -230,7 +230,7 @@ export class Enemy {
     if (this.dungeon) {
       // Dungeon packs wake when someone comes close or a packmate is hit, chase a while, then go home.
       const home = this.home!;
-      const awake = foe && (fd < 280 || this.taunt > 0 || g.time - this.lastHit < 3) && dist(foe.x, foe.y, home.x, home.y) < 760;
+      const awake = foe && (fd < 280 || this.taunt > 0 || (this.lastHit >= 0 && g.time - this.lastHit < 3)) && dist(foe.x, foe.y, home.x, home.y) < 760;
       if (!awake) foe = null;
       if (foe) { tx = foe.x; ty = foe.y; }
       else {
