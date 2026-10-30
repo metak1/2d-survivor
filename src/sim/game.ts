@@ -48,6 +48,8 @@ export class Game {
   wonAt = 0;
   /** The final night's boss is still alive past the night's end, so dawn waits. */
   holdNight = false;
+  /** Hearth health alerts already sent to players in dungeons tonight. */
+  hearthAlert = 0;
   /** Most players the run has had at once (its leaderboard bracket). */
   peakParty = 0;
   hearthLevel = 1;

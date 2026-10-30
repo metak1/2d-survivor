@@ -2,7 +2,7 @@
 // what's coming while there's still light to prepare.
 
 import { BOSS_EVERY, DARKNESS_MAX, DAY_LEN, FINAL_NIGHT, HORDE_CAP, HORDE_CAP_PER_PLAYER, NIGHT_BASE_LEN, WORLD_H, WORLD_W } from '../config';
-import { dungeonsAtDawn, expelAll, warnInside } from './dungeons';
+import { dungeonsAtDawn, nightfallInside, warnInside, watchHearth } from './dungeons';
 import { BOSS_ORDER, CHAMPION_MAX, CHAMPION_STEP, CHAMPION_TRAITS, ENEMIES, type ChampionTrait } from '../data/enemies';
 import type { EnemyId } from '../data/types';
 import { choice, compass, rand, TAU } from '../core/math';
@@ -40,6 +40,7 @@ export function updateCycle(g: Game, dt: number): void {
     if (g.phaseTime >= g.phaseLen) startNight(g);
     return;
   }
+  watchHearth(g);
   while (g.spawnQueue.length && g.spawnQueue[0].t <= g.phaseTime) {
     const s = g.spawnQueue.shift()!;
     spawnEnemy(g, s);
@@ -122,7 +123,8 @@ export function startNight(g: Game, early = false): void {
   g.spawnQueue = plan.queue;
   g.bloodMoon = plan.bloodMoon;
   g.bloodMoonNext = false;
-  expelAll(g);
+  g.hearthAlert = 0;
+  nightfallInside(g);
   onNightfall(g);
 
   const dirs = [...new Set(plan.angles.map(compass))].join(' and ');

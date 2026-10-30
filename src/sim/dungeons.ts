@@ -3,7 +3,8 @@
 // the same rooms; only each dungeon's state travels in snapshots. Inside wait packs of monsters
 // and a boss whose death reveals a legendary to craft at the forge (see forge.ts) and drops shards.
 //
-// Dungeons are a daytime trip: they're sealed at night, and anyone inside is cast out at nightfall.
+// Dungeons stay open at night: staying in (or going in) means trusting the base to hold without
+// you. Players inside are told when night falls and when the Hearth is in trouble.
 
 import { DUNGEON_GAP, DUNGEON_ROWS, MAP_H, MAP_W, TILE, WORLD_H } from '../config';
 import { DUNGEON_ORDER, DUNGEON_REOPEN, DUNGEONS, type DungeonTheme } from '../data/dungeons';
@@ -140,7 +141,6 @@ export const dungeonById = (g: Game, id: number) => g.dungeons.find(d => d.id ==
 export function entryLock(g: Game, d: Dungeon): string | null {
   const def = DUNGEONS[d.theme];
   if (g.day < def.opens) return `The ${def.name} opens on day ${def.opens}`;
-  if (g.phase !== 'day') return `The ${def.name} is sealed until dawn`;
   if (d.cleared) return `Conquered. Something stirs in it again on day ${d.reopen}`;
   return null;
 }
@@ -171,7 +171,8 @@ export function enterDungeon(g: Game, p: Player, d: Dungeon): void {
   if (!d.populated) populate(g, d);
   teleport(g, p, d.start.x + (p.slot - 1.5) * 30, d.start.y);
   const name = DUNGEONS[d.theme].name;
-  g.fx.toast(`You enter the ${name}. Its master waits in the deepest chamber. Night will cast you out.`, p.id);
+  g.fx.toast(`You enter the ${name}. Its master waits in the deepest chamber.`
+    + (g.phase === 'night' ? ' The Hearth is on its own while you\'re down here.' : ''), p.id);
   if (g.players.length > 1) g.fx.toast(`${p.name} entered the ${name}.`);
 }
 
@@ -179,21 +180,29 @@ export function leaveDungeon(g: Game, p: Player, d: Dungeon): void {
   teleport(g, p, d.x + (p.slot - 1.5) * 30, d.y + 60);
 }
 
-/** Nightfall: everyone inside a dungeon is cast out at its entrance. */
-export function expelAll(g: Game): void {
-  for (const p of g.players) {
-    const d = dungeonById(g, regionAt(g, p.x, p.y));
-    if (!d) continue;
-    leaveDungeon(g, p, d);
-    g.fx.toast(`Night falls: the ${DUNGEONS[d.theme].name} casts you out. Defend the Hearth!`, p.id);
-  }
+/** Tells every player inside a dungeon something about the world above. */
+function tellInside(g: Game, msg: string): void {
+  for (const p of g.players) if (dungeonById(g, regionAt(g, p.x, p.y))) g.fx.toast(msg, p.id);
 }
 
-/** Dusk: a warning for anyone still inside. */
+/** Dusk: a heads-up for anyone below. */
 export function warnInside(g: Game): void {
-  for (const p of g.players) {
-    const d = dungeonById(g, regionAt(g, p.x, p.y));
-    if (d) g.fx.toast(`Dusk is falling. At nightfall the ${DUNGEONS[d.theme].name} will cast you out.`, p.id);
+  tellInside(g, 'Dusk is falling above. Head back to defend the Hearth, or trust the walls to hold without you.');
+}
+
+/** Nightfall, with players still below. */
+export function nightfallInside(g: Game): void {
+  tellInside(g, 'Night has fallen. The horde is attacking the Hearth while you\'re below.');
+}
+
+/** Health shares of the Hearth that alert players below, once each per night. */
+const HEARTH_ALERTS = [0.5, 0.25];
+
+/** Called each night step: alerts players below when the Hearth drops past a threshold. */
+export function watchHearth(g: Game): void {
+  const h = g.world.hearth, k = h.hp / h.maxHp;
+  while (g.hearthAlert < HEARTH_ALERTS.length && k <= HEARTH_ALERTS[g.hearthAlert]) {
+    tellInside(g, `⚠ The Hearth is down to ${Math.round(HEARTH_ALERTS[g.hearthAlert++] * 100)}% health!`);
   }
 }
 
